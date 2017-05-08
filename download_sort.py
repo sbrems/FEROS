@@ -8,20 +8,19 @@ from astropy.time import Time
 from shutil import copyfile
 from glob import glob
 
-import ipdb
 
 eso = Eso()
 fn_query = "last_output_query.csv" #file of the query result.e.g. which files are gonna be downloaded
 home_dir = "/disk1/brems/FEROS/"
 par_dir = home_dir+"raw/"
-astroquery_dir = "/home/sbrems/.astropy/cache/astroquery/Eso/"
+astroquery_dir = "/home/brems/.astropy/cache/astroquery/Eso/"
 eso_user= "sbrems"
 #store_pwd = False
 flat_min_exptime = 1. #in sec
 
 def query_eso(target,instrument='FEROS',category='SCIENCE',
               sdate="",edate="",maxrows=999999):
-    call(["wget","-O",fn_query,"http://archive.eso.org/wdb/wdb/eso/eso_archive_main/query?tab_object=on&target="+target+"&resolver=simbad&tab_target_coord=on&ra=&dec=&box=00+10+00&deg_or_hour=hours&format=SexaHours&tab_prog_id=on&prog_id=&tab_instrument=on&instrument=+"+instrument+"+&stime="+sdate+"&starttime=12&etime="+edate+"&endtime=12&tab_dp_cat=true&dp_cat="+category+"&top="+str(maxrows)+"&wdbo=csv"])
+    call(["wget","-O",fn_query,"http://archive.eso.org/wdb/wdb/eso/eso_archive_main/query?tab_object=on&target="+target.replace('+','%2B')+"&resolver=simbad&tab_target_coord=on&ra=&dec=&box=00+10+00&deg_or_hour=hours&format=SexaHours&tab_prog_id=on&prog_id=&tab_instrument=on&instrument=+"+instrument+"+&stime="+sdate+"&starttime=12&etime="+edate+"&endtime=12&tab_dp_cat=true&dp_cat="+category+"&top="+str(maxrows)+"&wdbo=csv"])
     table = pd.read_csv(fn_query,comment='#',sep=',',skip_blank_lines=True)
     if category =='SCIENCE':
         table = table.loc[lambda x:x.Airmass >= 0.] #this is to remove any None lines the query sometimes returns
@@ -95,16 +94,16 @@ def extract_files(direct=None,overwrite_old = None):
     '''decompressing all .fits.Z files in the directory+subdirectories'''
     if direct == None:
         direct = par_dir
-    filelist = [y for x in os.walk(direct) for y in glob(os.path.join(x[0], '*.fits.Z'))]
+    filelist = [yy for x in os.walk(direct) for yy in glob(os.path.join(x[0], '*.fits.Z'))]
     print('Uncompressing the %d files' %len(filelist))
     for ifile in filelist:
-        if os.path.isfile(ifile[:-2]) and overwrite == None:
-            overwrite = input('File %s does exist. Overwrite all existing files? Type y or get asked for each file:'%ifile[:-2])
-        if os.path.isfile(ifile[:-2]) and overwrite.lower() == 'y':
+        if os.path.isfile(ifile[:-2]) and overwrite_old == None:
+            overwrite_old = input("File %s does exist. Overwrite all existing files? Type 'y' or get asked for each file:"%(ifile[:-2]))
+        if os.path.isfile(ifile[:-2]) and overwrite_old.lower() == 'y':
             os.remove(ifile[:-2])
         call(["uncompress",ifile])
 
-def full_download(target,extract=True,store_pwd=False,overwrite_old=None):
+def full_download(target,extract=True,store_pwd=False,overwrite_old=None,clear_cache=False):
     '''Main function. Run this to get all FEROS science files and the corresponding caibration
     files for each night (5 BIAS, 10 flats, 12 wave calib). If there is anything off this standard
     calibration, no calib files are downloaded and the corresponding nights are stored in a file
@@ -133,7 +132,7 @@ def full_download(target,extract=True,store_pwd=False,overwrite_old=None):
             id2night[obsid]=night
 #    os.chdir(home_dir)
 #    print('Downloading %d science obs'  %(len(t_sciene)) )
-    for ii in range(len(t_science[['Dataset ID','TPL START']])):
+    for ii in t_science.index:
         obsid = t_science['Dataset ID'][ii]
         date =  t_science['TPL START'][ii]
         night = find_night(date)
@@ -141,8 +140,8 @@ def full_download(target,extract=True,store_pwd=False,overwrite_old=None):
 #        os.chdir(par_dir+target+'/'+night.replace("-","")+'/')
 #        download_id(obsid)
 #    os.chdir(home_dir)
-    print('Downloading the %d files' %(len(id2night.keys())) )
-    #downloaded = download_id(id2night.keys())#gives the path+fn of the files
+    print('Downloading the %d files for target %s' %(len(id2night.keys()),target) )
+    downloaded = download_id(id2night.keys(),store_pwd=store_pwd)#gives the path+fn of the files
     fn_failed = par_dir+'failed_calib_'+target+'.txt'
     f_failed = open(fn_failed,'w')
     for failed_night in failed_calib:
@@ -165,10 +164,14 @@ def full_download(target,extract=True,store_pwd=False,overwrite_old=None):
             f_failed_down.close()
             print('Could not download %d files. Please download them manually.You find them in %s'\
                   %(old_len_missing,fn_failed_down))
+            break
     print('Done downloading %d files. Had problems with %d nights (stored in %s)'\
           %(len(id2night.keys()),len(failed_calib),fn_failed))
     if extract: extract_files(direct=par_dir+target+'/',overwrite_old=overwrite_old)
+    if clear_cache:
+        cachefiles = os.listdir(astroquery_dir)
+        for cfile in cachefiles:
+            os.remove(astroquery_dir+cfile)
     print('Done with all :)')
-    ipdb.set_trace()
 
         
