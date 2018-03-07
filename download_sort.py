@@ -8,7 +8,6 @@ from astropy.time import Time
 from shutil import copyfile
 from glob import glob
 
-
 eso = Eso()
 astroquery_dir = '/disk1/brems/astroquery_cache/'
 eso.cache_location = astroquery_dir
@@ -23,7 +22,7 @@ flat_min_exptime = 1.  # in sec
 
 def query_eso(target, instrument='FEROS', category='SCIENCE',
               sdate="", edate="", maxrows=999999):
-    call(["wget", "-O", fn_query, "http://archive.eso.org/wdb/wdb/eso/eso_archive_main/query?tab_object=on&target=" + target.replace('+', '%2B') + "&resolver=simbad&tab_target_coord=on&ra=&dec=&box=00+10+00&deg_or_hour=hours&format=SexaHours&tab_prog_id=on&prog_id=&tab_instrument=on&instrument=+" +
+    call(["wget", "-O", fn_query, "http://archive.eso.org/wdb/wdb/eso/eso_archive_main/query?tab_object=on&target=" + target.replace('+', '%2B') + "&resolver=simbad&tab_target_coord=on&ra=&dec=&box=00+08+00&deg_or_hour=hours&format=SexaHours&tab_prog_id=on&prog_id=&tab_instrument=on&instrument=+" +
           instrument + "+&stime=" + sdate + "&starttime=12&etime=" + edate + "&endtime=12&tab_dp_cat=true&dp_cat=" + category + "&top=" + str(maxrows) + "&wdbo=csv"])
     try:
         table = pd.read_csv(fn_query, comment='#', sep=',',
@@ -88,9 +87,14 @@ def download_id(ids, store_pwd=False):
     ids = [ii for ii in ids]
     ids = [ids[ii:ii + maxlength] for ii in range(0, len(ids), maxlength)]
     logged_in = False
-    while not logged_in:
-        logged_in = eso.login(eso_user, store_password=store_pwd)
+    while logged_in is not True:
+        try:
+            logged_in = eso.login(eso_user, store_password=store_pwd)
+        except ValueError:
+            logged_in = True
+        
     for iid in ids:
+        iid = iid
         print('ESO is getting the archive files ({} files) . \
 This may take some time! Be patient ;) It might have been \
 split up into smaller chunks.'.format(len(iid)))

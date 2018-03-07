@@ -6,7 +6,6 @@ targets = [  # ['HD61005', 'HD10700']  # targets from Olga
     # # from HERE the RVSpy targets with many (>20?) observations
     'HD_25457',
     'HD_10700'
-
     # #from HERE the Maren/Patrick targets
     # 'HD_139084', 'HD_183414', 'HD_216803', 'HD_224725',
     # 'CD-78_24', 'CD-31_571', 'HD_139084', 'CCDM_J01377+1836',
