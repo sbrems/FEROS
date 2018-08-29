@@ -103,12 +103,12 @@ Continuing using name {}'.format(
         starget.coordinates = [[stheader['RA'], stheader['DEC']],
                                [u.deg, u.deg], 'icrs']
         try:
-            starget.pm = 'auto'
+            starget.get_pm()
         except:
             print('Couldnt get pm for {}. Setting it to 0'.format(starget.sname))
             starget.pm = [0., 0.] * u.mas/u.yr
         try:
-            starget.SpT = 'auto'
+            starget.get_SpT()
             assert np.isfinite(starget.SpT_num())  # try it can be converted to num value
             print('Found SpT for {} on Simbad as {}'.format(starget.sname,
                                                             starget.SpT))
