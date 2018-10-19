@@ -7,21 +7,11 @@ from astroquery.eso import Eso
 from subprocess import call
 from astropy.time import Time
 from shutil import copyfile
+from warnings import warn
 from glob import glob
-
-
-###########THESE ARE THE DEFAULT PARAMETERS YOU PROBABLY WANT TO CHANGE ###############
-###########YOU CAN ALSO MODIFY THEM VIA A KEYWORD IN full_download() ##################
-default_astroquery_dir = '/mnt/fhgfs/RVSPY/astroquery_cache/'  # set to None to keep default
-# home_dir = "/disk1/brems/FEROS/"
-default_eso_user = "sbrems"
-# directrories for the calib and science files. Eventually you want 
-# default_science_dir = defaultcalib_dir
-default_calib_dir   = "/mnt/fhgfs/RVSPY/archival_datasearch_sep18/calibfiles/"
-default_science_dir = "/mnt/fhgfs/RVSPY/archival_datasearch_sep18/sciencefiles/"
-# for writing the log files
-default_log_dir =     "/mnt/fhgfs/RVSPY/archival_datasearch_sep18/"
-
+from .misc import find_night
+from config import default_science_dir, default_calib_dir, default_log_dir, \
+    default_astroquery_dir, default_eso_user, default_startdate
 
 if __name__ == '__main__':
     full_download(sys.argv)
@@ -35,10 +25,10 @@ def full_download(target, extract=True, store_pwd=False,
                   log_dir=None,
                   eso_user=None,
                   flat_min_exptime=1.,  # in sec
-                  sort_calibfiles_by_target=True,
+                  sort_calibfiles_by_target=False,
                   sort_sciencefiles_by_target=True,
                   query_radius="08+00",  # in "mm+ss"
-                  startdate="",
+                  startdate=None,
                   enddate="", ):
     '''Main function. Run this to get all FEROS science files and the corresponding caibration
     files for each night (5 BIAS, 10 flats, 12 wave calib). If there is anything off this standard
@@ -52,10 +42,13 @@ def full_download(target, extract=True, store_pwd=False,
     overwrite_old="ask" [True, False]
     if True overwrites the old .fits files with the new ones during extraction.
     False does skip the extraction, ask will ask
-    stardate/enddate= ""
+    startdate/enddate= ""
     give the first and last date of the data to search. "" searches for all data.
     format is yyyy-mm-dd (exclusive for beginning)'''
     # load the default values if noothers were given
+    if startdate is None:
+        startdate=default_startdate
+    print('Searching only for data after {}'.format(startdate))
     if eso_user is None:
         eso_user = default_eso_user
     if astroquery_dir is None:
@@ -105,7 +98,6 @@ def full_download(target, extract=True, store_pwd=False,
                                                             len(nights)))
 
     for night in nights:
-        ddir = os.path.join(calib_dir, night.replace("-", ""))
         if not os.path.exists(ddir):
             os.mkdir(ddir)
 #        os.chdir(ddir)
@@ -120,8 +112,8 @@ def full_download(target, extract=True, store_pwd=False,
 
     print('Downloading the %d files for target %s' % (len(id2night.keys()),
                                                       target))
-    #astroquery_dir = download_id(id2night.keys(), eso_user, store_pwd=store_pwd,
-    #                             astroquery_dir=astroquery_dir)
+    astroquery_dir = download_id(id2night.keys(), eso_user, store_pwd=store_pwd,
+                                 astroquery_dir=astroquery_dir)
     compress_files(astroquery_dir, fileending='.fits')
     print('Downloaded')
     fn_failed = os.path.join(log_dir, 'failed_calib_searches.csv')
@@ -320,14 +312,6 @@ def get_calib(date, flat_min_exptime=1):
     return down_ids, check_manually
 
 
-def find_night(dtime):
-    dtime = Time(dtime, format='mjd')
-    if (dtime.mjd % 1) >= 0.5:  # evening
-        return dtime.iso[0:10]
-    else:  # morning. previous day
-        return Time(dtime.jd - 1, format='jd').iso[0:10]
-
-
 def distribute_files(id_list, id2night, target, src_dir,
                      calib_dir, science_dir,
                      science_ids=[], fileending='.fits.Z'):
@@ -350,9 +334,13 @@ def distribute_files(id_list, id2night, target, src_dir,
             try:
                 copyfile(fpath, pnout)
             except IOError:
-                print('Somehow {} {} is missing (protected file?) - or {} cannot be written). \
+                if filetype == 'sciencefile':
+                    print('Somehow {} {} is missing (protected file?) - or {} cannot be written. \
 Trying downloading it later again.'.format(filetype, fpath, pnout))
-                missing_files.append(iid)
+                    missing_files.append(iid)
+                else:
+                    warn('{} {} could not be downloaded. Even though it is not a \
+potentially protected sciencefile')
     return missing_files
 
 
@@ -376,12 +364,17 @@ def extract_files(direct, overwrite_old="ask"):
     print('Uncompressing the %d files' % len(filelist))
     for ifile in filelist:
         # if the target file does exist, ask
-        if os.path.isfile(ifile[:-2]) and overwrite_old not in [True, False]:
-            overwrite_old = input(
-                "File %s does exist. Overwrite all existing files? Type 'y' or get asked for each file:" % (ifile[:-2]))
-            if overwrite_old in ['y', 'Y', 'j', 'J', 't', 'T', 'True']:
-                overwrite_old = True
-        if os.path.isfile(ifile[:-2]) and overwrite_old:
-            os.remove(ifile[:-2])
+        if os.path.isfile(ifile[:-2]):
+            if overwrite_old not in [True, False]:
+                overwrite_old = input(
+                    "File %s does exist. Overwrite all existing files? Type 'y' or get asked for each file:" % (ifile[:-2]))
+                if overwrite_old in ['y', 'Y', 'j', 'J', 't', 'T', 'True']:
+                    overwrite_old = True
+                else:
+                    overwrite_old = 'ask'
+            if overwrite_old:
+                os.remove(ifile[:-2])
+            if not overwrite_old:
+                continue
         call(["uncompress", ifile])
     return overwrite_old
