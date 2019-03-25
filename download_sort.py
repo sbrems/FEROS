@@ -9,7 +9,7 @@ from astropy.time import Time
 from shutil import copyfile
 from warnings import warn
 from glob import glob
-from .misc import find_night
+from misc import find_night
 from config import default_science_dir, default_calib_dir, default_log_dir, \
     default_astroquery_dir, default_eso_user, default_startdate
 

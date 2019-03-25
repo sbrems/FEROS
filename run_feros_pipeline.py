@@ -33,7 +33,7 @@ def show_pdfs(target, prog="xdg-open",
         Popen([prog, pdf])
 
 
-def all_targets(science_dir=None, npools=5,
+def all_targets(science_dir=None, npools=10,
                 do_class=True, extra_calib_dir=True,
                 calib_dir=None):
     '''Running CERES-FEROS pipeline on all subfolders. Assuming the folders are sorted
@@ -51,13 +51,34 @@ def all_targets(science_dir=None, npools=5,
             calib_dir = default_calib_dir
     home_dir = os.getcwd()
     for tardir in tqdm(os.scandir(science_dir)):
-        if tardir.is_dir():
+        if tardir.is_dir() and not tardir.name.endswith('red'):
             tarname = tardir.name
+            # already processed files...delete later!
+            if tarname in ['HD106906', 'HD108874', 'HD108904', 'HD109085',
+                           'HD111103', 'HD111170', 'HD118972',
+                           'HD128311', 'HD130322',
+                           'HD140374', 'HD131511',
+                           'HD146897', 'HD16673', 'HD168746',
+                           'HD170773', 'HD180134', 'HD187897', 'HD199532',
+                           'HD202917', 'HD203',
+                           'HD206893', 'HD209253', 'HD30447',
+                           'HD35114', 'HD3296', 'HD38397',
+                           'HD38949', 'HD40136', 'HD48370',
+                           'HD52265', 'HD53143', 'HD55052',
+                           'HD59967', 'HD72687',
+                           'HD74340', 'HD76653',
+                           'HD84075', 'HD870', 'HD93932',
+                           'MML36', 'MML43', 'SAO150676', ]:
+                print('SKIPPING {} AS MANUALLY SELECTED'.format(tarname))
+                continue
             scfiles = [ffile for ffile in os.scandir(tardir) if (
                 ffile.name.endswith('.fits') and
                 ffile.name.startswith('FEROS'))]
+            if len(scfiles) == 0:
+                print('Didnt find any observations for {}. Skipping it'.format(tarname))
+                continue
             nights = [find_night(fits.getheader(ffile.path)['MJD-OBS'])
-                                 for ffile in scfiles]
+                      for ffile in scfiles]
             nights = np.unique(nights)
             print('Processing target {} with {} different nights'.format(tarname, len(nights)))
             # store the calibfiles which are copied later and then deleted if extra_calib_dir
@@ -89,7 +110,7 @@ def all_targets(science_dir=None, npools=5,
                     os.remove(calibfile.path)
 
         
-def all_subfolders(target, direct=None, npools=5,
+def all_subfolders(target, direct=None, npools=4,
                    do_class=True, show_pdfs=False):
     '''runs the feros ceres pipeline on all subfolders of the directory which have
     at least 22 .fits files in it and do not end on _red'''
@@ -119,7 +140,7 @@ def all_subfolders(target, direct=None, npools=5,
 
 
 def _run_ferospip(do_class=True, root=os.getcwd(),
-                  npools=1):
+                  npools=4):
     if do_class:
         p = Popen(["python2", "ferospipe.py", root,
                    "-npools", str(npools), "-do_class",
@@ -133,7 +154,6 @@ def _run_ferospip(do_class=True, root=os.getcwd(),
     output = output.decode('utf-8')
     err = err.decode('utf-8')
     print(str(output), str(err))
-    import ipdb; ipdb.set_trace()
     if not os.path.exists(root+'_red'):
         os.mkdir(root+'_red')
     fnoutput = root+'_red/output.txt'
@@ -180,7 +200,8 @@ Continuing using name {} and changing it in header for CERES to work'.format(
                     tarname, headername, st, tarname))
                 dat, head = fits.getdata(st, header=True)
                 head['OBJECT'] = tarname
-                fits.writeto(st, dat, header=head, overwrite=True)
+                fits.writeto(st, dat, header=head, overwrite=True,
+                             output_verify='warn')
         stheader = fits.getheader(science_fits[0])
         starget = Star(tarname)
         starget.coordinates = [[stheader['RA'], stheader['DEC']],

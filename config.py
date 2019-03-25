@@ -2,7 +2,7 @@
 
 
 # SET THE FOLDER PATHS
-ceres_dir = "/mnt/fhgfs/RVSPY/ceres-master/feros/"  # where to run ceres from. Need it as its Py2
+ceres_dir = "/mnt/fhgfs/RVSPY/ceres/feros/"  # where to run ceres from. Need it as its Py2
 # the files below need to be sorted by target and date
 default_science_dir = "/mnt/fhgfs/RVSPY/archival_datasearch_oct18/sciencefiles/"
 # directrories for the calib and science files. Eventually you want 
