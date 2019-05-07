@@ -1,8 +1,10 @@
 import os
 import numpy as np
 import astropy.units as u
+from astropy.table import Table
 import re
 import warnings
+from glob import glob
 from misc import find_night
 from starclass import Star
 from subprocess import Popen, PIPE
@@ -21,21 +23,24 @@ sorted by targetname and date')
 
     
 
-def show_pdfs(target, prog="xdg-open",
-              science_dir=None):
+def show_pdfs(target, prog=None,
+              science_dir=None,):
     if science_dir is  None:
         science_dir = default_science_dir
-    direct = os.path.join(default_science_dir, target)
+    # direct = os.path.join(default_science_dir, target)
     pdf_files = []
-    for root, subdirs, files in os.walk(direct):
-        pdf_files += [os.path.join(root, x) for x in files if x.endswith('.pdf')]
-    for pdf in pdf_files:
-        Popen([prog, pdf])
+    pdf_files = sorted(glob(os.path.join(science_dir, '**/FEROS*{}*.pdf'.format(target)),
+                                  recursive=True))
+
+    if prog is not None:
+        for pdf in pdf_files:
+            Popen([prog, pdf])
+    return pdf_files
 
 
 def all_targets(science_dir=None, npools=10,
                 do_class=True, extra_calib_dir=True,
-                calib_dir=None):
+                calib_dir=None, ignore_dirs=[]):
     '''Running CERES-FEROS pipeline on all subfolders. Assuming the folders are sorted
     by Target only, e.g. ./direct/HD10000/sciencefiles.fits
     Use all_subfolders routine of the same module to reduce files also sorted by
@@ -48,29 +53,33 @@ def all_targets(science_dir=None, npools=10,
     if science_dir is None:
         science_dir = default_science_dir
     if extra_calib_dir and calib_dir is None:
-            calib_dir = default_calib_dir
+        calib_dir = default_calib_dir
+    elif calib_dir is None:
+        calib_dir = science_dir
+
     home_dir = os.getcwd()
     for tardir in tqdm(os.scandir(science_dir)):
-        if tardir.is_dir() and not tardir.name.endswith('red'):
+        if tardir.is_dir() and not tardir.name.endswith('red') and not \
+           tardir.name in ignore_dirs:
             tarname = tardir.name
             # already processed files...delete later!
-            if tarname in ['HD106906', 'HD108874', 'HD108904', 'HD109085',
-                           'HD111103', 'HD111170', 'HD118972',
-                           'HD128311', 'HD130322',
-                           'HD140374', 'HD131511',
-                           'HD146897', 'HD16673', 'HD168746',
-                           'HD170773', 'HD180134', 'HD187897', 'HD199532',
-                           'HD202917', 'HD203',
-                           'HD206893', 'HD209253', 'HD30447',
-                           'HD35114', 'HD3296', 'HD38397',
-                           'HD38949', 'HD40136', 'HD48370',
-                           'HD52265', 'HD53143', 'HD55052',
-                           'HD59967', 'HD72687',
-                           'HD74340', 'HD76653',
-                           'HD84075', 'HD870', 'HD93932',
-                           'MML36', 'MML43', 'SAO150676', ]:
-                print('SKIPPING {} AS MANUALLY SELECTED'.format(tarname))
-                continue
+            # if tarname in ['HD106906', 'HD108874', 'HD108904', 'HD109085',
+            #                'HD111103', 'HD111170', 'HD118972',
+            #                'HD128311', 'HD130322',
+            #                'HD140374', 'HD131511',
+            #                'HD146897', 'HD16673', 'HD168746',
+            #                'HD170773', 'HD180134', 'HD187897', 'HD199532',
+            #                'HD202917', 'HD203',
+            #                'HD206893', 'HD209253', 'HD30447',
+            #                'HD35114', 'HD3296', 'HD38397',
+            #                'HD38949', 'HD40136', 'HD48370',
+            #                'HD52265', 'HD53143', 'HD55052',
+            #                'HD59967', 'HD72687',
+            #                'HD74340', 'HD76653',
+            #                'HD84075', 'HD870', 'HD93932',
+            #                'MML36', 'MML43', 'SAO150676', ]:
+            #     print('SKIPPING {} AS MANUALLY SELECTED'.format(tarname))
+            #     continue
             scfiles = [ffile for ffile in os.scandir(tardir) if (
                 ffile.name.endswith('.fits') and
                 ffile.name.startswith('FEROS'))]
@@ -101,13 +110,15 @@ def all_targets(science_dir=None, npools=10,
                          and ffile.name.startswith('FEROS')]
             _make_reffile(tarname, tardir, fitsfiles)
             os.chdir(ceres_dir)
-            _run_ferospip(do_class=do_class, root=tardir.path,
-                          npools=npools)
+
+            if  not tarname == 'b_Aql':
+                _run_ferospipe(do_class=do_class, root=tardir.path,
+                               npools=npools)
             os.chdir(home_dir)
-            if extra_calib_dir:
-                print('Cleaning the calibdata...')
-                for calibfile in [ff for nightlist in calibfiles for ff in nightlist]:
-                    os.remove(calibfile.path)
+#            if extra_calib_dir:
+#                print('Cleaning the calibdata...')
+#                for calibfile in [ff for nightlist in calibfiles for ff in nightlist]:
+#                    os.remove(calibfile.path)
 
         
 def all_subfolders(target, direct=None, npools=4,
@@ -127,7 +138,7 @@ def all_subfolders(target, direct=None, npools=4,
                    #######################################################\n'%(root,len(fits_files)))
             tarname = os.path.split(os.path.dirname(root))[-1]
             _make_reffile(tarname, root, fits_files)
-            _run_ferospip(do_class=do_class, root=root)
+            _run_ferospipe(do_class=do_class, root=root)
         else:
             print('Ignoring folder {} as it has less than 22 files or ends with "_red"'.format(
                 root))
@@ -139,17 +150,63 @@ def all_subfolders(target, direct=None, npools=4,
         show_pdfs(target)
 
 
-def _run_ferospip(do_class=True, root=os.getcwd(),
-                  npools=4):
+def check_fits_files(check_dir=os.getcwd(), recursive=True):
+    '''Some fits files get downloaded wrongly. Check recursively. 
+    Check the checksums
+    and notify those not openable or with wrong checksum. Also store
+    their folder so they can be redownloaded'''
+    if os.path.isfile(check_dir):
+        ffiles = [ffiles, ]
+    else:
+        if recursive:
+            ffiles = glob(os.path.join(check_dir, '**/*.fits'),
+                          recursive=True)
+        else:
+            ffiles = glob(os.path.join(check_dir, '*.fits'))
+        ffiles = sorted(ffiles)
+    failsizes = []
+    failfiles = []
+    failreasons = []
+    
+    print('Checking {} files in {}'.format(len(ffiles), check_dir))
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error')
+        for ffile in tqdm(ffiles):
+            try:
+                hdul = fits.open(ffile, checksum=True)
+                hdul.close()
+                continue
+            except Warning:
+                print('ChecksumError found')
+                failreasons.append('checksumError')
+            except:
+                failreasons.append('notOpenable')
+            failsizes.append(os.path.getsize(ffile))
+            failfiles.append(ffile)
+            hdul.close()
+    tfailed = Table([failreasons, failsizes, failfiles],
+                    names=('reason', 'size', 'path'))
+    tfailed['size'].unit = u.byte
+    return tfailed
+
+
+def _run_ferospipe(do_class=False, root=os.getcwd(),
+                   npools=4):
+    print('Running pipeline on folder {}'.format(os.getcwd()))
+
     if do_class:
         p = Popen(["python2", "ferospipe.py", root,
                    "-npools", str(npools), "-do_class",
-                   "-reffile", 'reffile.txt'],
+                   "-reffile", os.path.join(root, 'reffile.txt')],
                   stdin=PIPE, stdout=PIPE, stderr=PIPE)
     else:
-        p = Popen(["python2", "ferospipe.py", root,"-npools",
-                   str(npools), "-reffile", 'reffile.txt'],
+        p = Popen(["python2", "ferospipe.py", root, "-npools",
+                   str(npools), 
+                   "-reffile", os.path.join(root, 'reffile.txt')],
                   stdin=PIPE, stdout=PIPE, stderr=PIPE)
+
+    # for stdout_line in iter(p.stdout.readline, ""):
+        #print(stdout_line)
     output, err = p.communicate()
     output = output.decode('utf-8')
     err = err.decode('utf-8')
@@ -157,10 +214,10 @@ def _run_ferospip(do_class=True, root=os.getcwd(),
     if not os.path.exists(root+'_red'):
         os.mkdir(root+'_red')
     fnoutput = root+'_red/output.txt'
-    outputfile = open(fnoutput, 'w+')
-    outputfile.write(str(output)+'\n'+'Erroroutput:\n'+str(err))
-    outputfile.close()
+    with open(fnoutput, 'w+') as outputfile:
+        outputfile.write(str(output)+'\n'+'Erroroutput:\n'+str(err))
     #rc = p.returncode
+    p.stdout.close()
     regex = re.compile('Achievable RV precision is\s+[0-9]*\.[0-9]+')
     rvs = [x[26::].strip() for x in regex.findall(output)]
     fnrv = root+'_red/achievable_rvs.txt'
@@ -218,7 +275,7 @@ Continuing using name {} and changing it in header for CERES to work'.format(
         except:
             print('Couldnt find SpT on Simbad for {}. \
     Setting it to G2III'.format(starget.sname))
-            starget.SpT = ('G2III')
+            starget.SpT = ('G2V')
         # determine which of the three masks to use. 05III has numerical val 15.
         if starget.SpT_num() >= 70:  # Mstar
             mask = 'M2'
@@ -227,6 +284,7 @@ Continuing using name {} and changing it in header for CERES to work'.format(
         else:  # the default mask
             mask = 'G2'
         print('Using mask {}'.format(mask))
+
         with open(os.path.join(root, 'reffile.txt'), 'w') as reff:
             reff.write('{}, {}, {}, {}, {}, {}, {}, {}'.format(
                 starget.sname,

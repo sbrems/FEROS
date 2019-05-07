@@ -70,6 +70,7 @@ def full_download(target, extract=True, store_pwd=False,
     t_science = query_eso(target, category='SCIENCE', 
                           sdate=startdate, edate=enddate,
                           fn_query=fn_query)
+
     for outdir in [calib_dir, science_dir, astroquery_dir]:
         if outdir is not None:
             if not os.path.exists(outdir):
@@ -98,6 +99,7 @@ def full_download(target, extract=True, store_pwd=False,
                                                             len(nights)))
 
     for night in nights:
+        ddir = os.path.join(calib_dir, night.replace("-", ""))
         if not os.path.exists(ddir):
             os.mkdir(ddir)
 #        os.chdir(ddir)
@@ -154,6 +156,7 @@ You find them in %s' % (old_len_missing, fn_failed_down))
             break
     print('Done downloading %d files. Had problems with %d nights (stored in %s)'
           % (len(id2night.keys()), len(failed_calib_nights), fn_failed))
+
     if extract:
         overwrite_old = extract_files(direct=os.path.join(calib_dir),
                       overwrite_old=overwrite_old)
@@ -249,10 +252,11 @@ def download_id(ids, eso_user, astroquery_dir=None,
     ids = [ids[ii:ii + maxlength] for ii in range(0, len(ids), maxlength)]
     logged_in = False
     while not logged_in:
-#        try:
+        try:
             logged_in = eso.login(eso_user, store_password=store_pwd)
-#        except ValueError:
-#            logged_in = True
+        except:
+            logged_in = eso.login(eso_user, store_password=store_pwd)
+
         
     for iid in ids:
         iid = iid
@@ -264,7 +268,11 @@ split up into smaller chunks.'.format(len(iid)))
 
 def get_calib(date, flat_min_exptime=1):
     date = date.replace(" ", "-")
-    edate = Time(Time(date).jd + 1, format='jd').iso[0:10]
+    try:
+        edate = Time(Time(date).jd + 1, format='jd').iso[0:10]
+    except ValueError:
+        date = "-".join([date[0:4], date[4:6], date[6:8]])
+        edate = Time(Time(date).jd + 1, format='jd').iso[0:10]
 
     t_query = query_eso("", category="CALIB",
                         sdate=date,
@@ -330,7 +338,7 @@ def distribute_files(id_list, id2night, target, src_dir,
             filetype = 'calibfile'
             pnout = os.path.join(outdir[filetype], id2night[iid].replace("-", ""),
                                  iid+fileending)
-        if not os.path.isfile(pnout):
+        if not (os.path.isfile(pnout) or os.path.isfile(pnout[:-2])):
             try:
                 copyfile(fpath, pnout)
             except IOError:
@@ -359,8 +367,14 @@ def compress_files(direct, fileending='.fits'):
 
 def extract_files(direct, overwrite_old="ask"):
     '''decompressing all .fits.Z files in the directory+subdirectories'''
-    filelist = [yy for x in os.walk(direct)
-                for yy in glob(os.path.join(x[0], '*.fits.Z'))]
+    # filelist = [yy for x in os.walk(direct)
+    #             for yy in glob(os.path.join(x[0], '*.fits.Z'))]
+    filelist = []
+    for root, dirs, files in os.walk(direct):
+        for ff in files:
+            if ff.endswith('.fits.Z'):
+                filelist.append(os.path.join(root, ff))
+
     print('Uncompressing the %d files' % len(filelist))
     for ifile in filelist:
         # if the target file does exist, ask
@@ -368,7 +382,7 @@ def extract_files(direct, overwrite_old="ask"):
             if overwrite_old not in [True, False]:
                 overwrite_old = input(
                     "File %s does exist. Overwrite all existing files? Type 'y' or get asked for each file:" % (ifile[:-2]))
-                if overwrite_old in ['y', 'Y', 'j', 'J', 't', 'T', 'True']:
+                if overwrite_old in ['y', 'Y', 'j', 'J', 't', 'T', 'True', True]:
                     overwrite_old = True
                 else:
                     overwrite_old = 'ask'
