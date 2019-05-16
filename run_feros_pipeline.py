@@ -242,6 +242,7 @@ def _make_reffile(tarname, root, fits_files, science_dir=None):
     # targets = []
     # if there is no fscience file found and the number corresponds to a
     # possible calib number, dont process this folder
+
     if (len(science_fits) == 0) and (len(fits_files) == 27 or
                                      len(fits_files) == 21):
         warnings.warn('Ignoring folder {} as there seem to be no science \
@@ -249,20 +250,24 @@ files.'.format(root))
         with open(os.path.join(science_dir, 'unreduced_folders.txt'), 'a+') as f:
             f.write(root+'\n')
     else:
-        for st in science_fits:
-            headername = str(fits.getheader(st)['OBJECT'].upper().strip())
-            if headername != tarname:
-                warnings.warn('Name of target ({}) is {} in header of file {}. \
-Continuing using name {} and changing it in header for CERES to work'.format(
-                    tarname, headername, st, tarname))
-                dat, head = fits.getdata(st, header=True)
-                head['OBJECT'] = tarname
-                fits.writeto(st, dat, header=head, overwrite=True,
-                             output_verify='warn')
-        stheader = fits.getheader(science_fits[0])
         starget = Star(tarname)
-        starget.coordinates = [[stheader['RA'], stheader['DEC']],
-                               [u.deg, u.deg], 'icrs']
+        if len(science_fits) == 0:
+            warnings.warn('No fits file found for target {}. Using coordinates also from Simbad'.format(tarname))
+            starget.coordinates = 'auto'
+        else:
+            for st in science_fits:
+                headername = str(fits.getheader(st)['OBJECT'].upper().strip())
+                if headername != tarname:
+                    warnings.warn('Name of target ({}) is {} in header of file {}. \
+                    Continuing using name {} and changing it in header for CERES to work'.format(
+                        tarname, headername, st, tarname))
+                    dat, head = fits.getdata(st, header=True)
+                    head['OBJECT'] = tarname
+                    fits.writeto(st, dat, header=head, overwrite=True,
+                                 output_verify='warn')
+            stheader = fits.getheader(science_fits[0])
+            starget.coordinates = [[stheader['RA'], stheader['DEC']],
+                                   [u.deg, u.deg], 'icrs']
         starget.pm = 'auto'
         #except:
         #    print('Couldnt get pm for {}. Setting it to 0'.format(starget.sname))
@@ -284,14 +289,13 @@ Continuing using name {} and changing it in header for CERES to work'.format(
         else:  # the default mask
             mask = 'G2'
         print('Using mask {}'.format(mask))
-
-        with open(os.path.join(root, 'reffile.txt'), 'w') as reff:
-            reff.write('{}, {}, {}, {}, {}, {}, {}, {}'.format(
+        with open(os.path.join(root, 'reffile.txt'), 'a') as reff:
+            reff.write('{}, {}, {}, {}, {}, {}, {}, {}\n'.format(
                 starget.sname,
-                ':'.join([str(cc) for cc in starget.coordinates.ra.hms[0:3]]),
-                ':'.join([str(cc) for cc in starget.coordinates.dec.dms[0:3]]),
+                starget.coordinates.ra.to_string(u.hourangle, sep=':')[0],
+                starget.coordinates.dec.to_string(u.degree, sep=':')[0],
                 starget.pm[0].to('mas / yr').value,
                 starget.pm[1].to('mas / yr').value,
                 0,
                 mask,
-                4.0))
+                7.0))
