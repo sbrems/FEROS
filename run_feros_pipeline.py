@@ -39,10 +39,10 @@ def show_pdfs(target, prog=None,
 
 
 def all_targets(science_dir=None, npools=10,
-                do_class=True, extra_calib_dir=True,
+                do_class=True, extra_calib_dir=False,
                 calib_dir=None, ignore_dirs=[]):
     '''Running CERES-FEROS pipeline on all subfolders. Assuming the folders are sorted
-    by Target only, e.g. ./direct/HD10000/sciencefiles.fits
+    by Target only, e.g. ./direct/HD10000/sciencefiles.fits - unless extra_calib_dir=True
     Use all_subfolders routine of the same module to reduce files also sorted by
     date.
     extra_calib_dir = True
@@ -121,17 +121,17 @@ def all_targets(science_dir=None, npools=10,
 #                    os.remove(calibfile.path)
 
         
-def all_subfolders(target, direct=None, npools=4,
+def all_subfolders(direct=None, npools=4,
                    do_class=True, show_pdfs=False):
     '''runs the feros ceres pipeline on all subfolders of the directory which have
     at least 22 .fits files in it and do not end on _red'''
     if direct is None:
-        direct = os.path.join(default_science_dir, target)
+            direct = default_science_dir
     home_dir = os.getcwd()
     os.chdir(ceres_dir)
-    for root, subdirs, files in os.walk(direct):
+    for root, subdirs, files in tqdm(os.walk(direct)):
         fits_files = [x for x in files if x.endswith('.fits')]
-        if len(fits_files) >= 22 and not root.endswith('_red'):  # at least 5+10+12(6) calibration files + 1 science
+        if len(fits_files) >= 16 and not root.endswith('_red'):  # at least 5+10+12(6) calibration files + 1 science
             print('\n\
                    #######################################################\n\
                    Processing dir %s containing %d fits-files\n\
@@ -140,14 +140,14 @@ def all_subfolders(target, direct=None, npools=4,
             _make_reffile(tarname, root, fits_files)
             _run_ferospipe(do_class=do_class, root=root)
         else:
-            print('Ignoring folder {} as it has less than 22 files or ends with "_red"'.format(
+            print('Ignoring folder {} as it has less than 16 files or ends with "_red"'.format(
                 root))
 
     os.chdir(home_dir)
     print('Done reducing all subfolders in %s (successfully?)'%direct)
     if show_pdfs:
         print('Opening the pdfs')
-        show_pdfs(target)
+        show_pdfs(direct)
 
 
 def check_fits_files(check_dir=os.getcwd(), recursive=True):
@@ -192,8 +192,9 @@ def check_fits_files(check_dir=os.getcwd(), recursive=True):
 
 def _run_ferospipe(do_class=False, root=os.getcwd(),
                    npools=4):
-    print('Running pipeline on folder {}'.format(os.getcwd()))
-
+    predir = os.getcwd()
+    print('Running pipeline on folder {}'.format(root))
+    os.chdir(os.path.join(ceres_dir, 'feros'))
     if do_class:
         p = Popen(["python2", "ferospipe.py", root,
                    "-npools", str(npools), "-do_class",
@@ -204,7 +205,7 @@ def _run_ferospipe(do_class=False, root=os.getcwd(),
                    str(npools), 
                    "-reffile", os.path.join(root, 'reffile.txt')],
                   stdin=PIPE, stdout=PIPE, stderr=PIPE)
-
+    os.chdir(predir)
     # for stdout_line in iter(p.stdout.readline, ""):
         #print(stdout_line)
     output, err = p.communicate()
@@ -290,12 +291,13 @@ files.'.format(root))
             mask = 'G2'
         print('Using mask {}'.format(mask))
         with open(os.path.join(root, 'reffile.txt'), 'a') as reff:
-            reff.write('{}, {}, {}, {}, {}, {}, {}, {}\n'.format(
+            reff.write('{},{},{},{},{},{},{},{}\n'.format(
                 starget.sname,
-                starget.coordinates.ra.to_string(u.hourangle, sep=':')[0],
-                starget.coordinates.dec.to_string(u.degree, sep=':')[0],
+                starget.coordinates.ra.to_string(u.hourangle, sep=':'),
+                starget.coordinates.dec.to_string(u.degree, sep=':'),
                 starget.pm[0].to('mas / yr').value,
                 starget.pm[1].to('mas / yr').value,
                 0,
                 mask,
-                7.0))
+                10.0))
+

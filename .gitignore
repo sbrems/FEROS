@@ -1,1 +1,3 @@
 last_output_query.csv
+__pycache__
+*.pyc
