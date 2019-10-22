@@ -62,24 +62,7 @@ def all_targets(science_dir=None, npools=10,
         if tardir.is_dir() and not tardir.name.endswith('red') and not \
            tardir.name in ignore_dirs:
             tarname = tardir.name
-            # already processed files...delete later!
-            # if tarname in ['HD106906', 'HD108874', 'HD108904', 'HD109085',
-            #                'HD111103', 'HD111170', 'HD118972',
-            #                'HD128311', 'HD130322',
-            #                'HD140374', 'HD131511',
-            #                'HD146897', 'HD16673', 'HD168746',
-            #                'HD170773', 'HD180134', 'HD187897', 'HD199532',
-            #                'HD202917', 'HD203',
-            #                'HD206893', 'HD209253', 'HD30447',
-            #                'HD35114', 'HD3296', 'HD38397',
-            #                'HD38949', 'HD40136', 'HD48370',
-            #                'HD52265', 'HD53143', 'HD55052',
-            #                'HD59967', 'HD72687',
-            #                'HD74340', 'HD76653',
-            #                'HD84075', 'HD870', 'HD93932',
-            #                'MML36', 'MML43', 'SAO150676', ]:
-            #     print('SKIPPING {} AS MANUALLY SELECTED'.format(tarname))
-            #     continue
+
             scfiles = [ffile for ffile in os.scandir(tardir) if (
                 ffile.name.endswith('.fits') and
                 ffile.name.startswith('FEROS'))]
@@ -98,7 +81,7 @@ def all_targets(science_dir=None, npools=10,
                     calibfiles.append([cfile for cfile in os.scandir(
                         os.path.join(calib_dir, night)) if (
                                   cfile.is_file() and cfile.name.endswith('.fits'))])
-                    if len(calibfiles[-1]) not in [21, 27]:
+                    if not len(calibfiles[-1]) >= 12:
                         print('Did not find calibfiles for night {}. Skipping it'.format(
                             night))
                         continue
@@ -111,9 +94,8 @@ def all_targets(science_dir=None, npools=10,
             _make_reffile(tarname, tardir, fitsfiles)
             os.chdir(ceres_dir)
 
-            if  not tarname == 'b_Aql':
-                _run_ferospipe(do_class=do_class, root=tardir.path,
-                               npools=npools)
+            _run_ferospipe(do_class=do_class, root=tardir.path,
+                           npools=npools)
             os.chdir(home_dir)
 #            if extra_calib_dir:
 #                print('Cleaning the calibdata...')
