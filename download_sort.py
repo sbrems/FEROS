@@ -3,6 +3,7 @@ import sys
 import datetime
 import numpy as np
 import pandas as pd
+from itertools import groupby
 from astroquery.eso import Eso
 from subprocess import call
 from astropy.time import Time
@@ -31,7 +32,7 @@ def full_download(target, extract=True, store_pwd=False,
                   startdate=None,
                   enddate="", ):
     '''Main function. Run this to get all FEROS science files and the corresponding caibration
-    files for each night (5 BIAS, 10 flats, 12 wave calib). If there is anything off this standard
+    files for each night (5 BIAS, 10 flats, 6 or 12 wave calib). If there is anything off this standard
     calibration, no calib files are downloaded and the corresponding nights are stored in a file
     called failed_calib_<target>.txt. So check this out manually then.
     sort_calibfiles_by_target=True
@@ -209,18 +210,33 @@ def filter_calib(table, date=None, keep=None,
                   (table.Type == 'WAVE') |
                   ((table.Type == 'FLAT') &
                    (table.Exptime >= flat_min_exptime))]
+    # if there are 6 BIASES, drop the first one as only 5 are needed and error
+    # is known
     if len(table[table.Type == 'BIAS']) == 6:
         idx_first_bias = table[(table.Type == 'BIAS')].index[0]
         table.drop(idx_first_bias)
     table.reset_index()
     table = table.drop(table[(table.Type == 'FLAT') &
                              ~(table.Exptime >= flat_min_exptime)].index)
+    # if all waves are taken in a row, keep the last 12 of them
+    # first find the longest consecutive waves
+    waveidz = longest_sequence_idz(list(table.Type), key='WAVE')
+    if len(waveidz) >= 12:
+        if keep == 'last':
+            waveidz = waveidz[-12:]
+        elif keep == 'first':
+            waveidz = waveidz[:12]
+    # now remove the other waves
+    remidz = [ri for ri in table[table.Type=='WAVE'].index if ri not in waveidz]
+    table.drop(remidz)
+
     # if still too many entries, try to cut the first or last
     table.reset_index()
-    if keep == 'last':
-        table = table.iloc[-27:]
-    if keep == 'first':
-        table = table.iloc[:27]
+    if len(table) > 27:
+        if keep == 'last':
+            table = table.iloc[-27:]
+        elif keep == 'first':
+            table = table.iloc[:27]
     return table
 
 
@@ -283,16 +299,16 @@ def get_calib(date, flat_min_exptime=1):
     calib_failed = True
     if len(t_query) > 0:
         # try first half of the night, then second
-        if check_calib(filter_calib(t_query, date=date, keep='first',
-                                    flat_min_exptime=flat_min_exptime),
-                                    flat_min_exptime=flat_min_exptime):
-            t_query2 = filter_calib(t_query, date=date, keep='first',
-                                    flat_min_exptime=flat_min_exptime)
-            calib_failed = False
-        elif check_calib(filter_calib(t_query, date=date, keep='last',
+        if check_calib(filter_calib(t_query, date=date, keep='last',
                                     flat_min_exptime=flat_min_exptime),
                                     flat_min_exptime=flat_min_exptime):
             t_query2 = filter_calib(t_query, date=date, keep='last',
+                                    flat_min_exptime=flat_min_exptime)
+            calib_failed = False
+        elif check_calib(filter_calib(t_query, date=date, keep='first',
+                                    flat_min_exptime=flat_min_exptime),
+                                    flat_min_exptime=flat_min_exptime):
+            t_query2 = filter_calib(t_query, date=date, keep='first',
                                     flat_min_exptime=flat_min_exptime)
             calib_failed = False
         elif check_calib(filter_calib(t_query, date=edate, keep='first',
@@ -392,3 +408,22 @@ def extract_files(direct, overwrite_old="ask"):
                 continue
         call(["uncompress", ifile])
     return overwrite_old
+
+
+def longest_sequence_idz(array, key):
+    '''Return the indices of the longest reoccuring time of key. E.g.
+    key = 0:
+    [0, 3, 2, 0, 0, 0, 3] returns [3, 4, 5].
+    Return [] if key not in array array'''
+    if key in array:
+        pos, max_len, cum_pos = 0, 0, 0
+        for k, g in groupby(array):
+            if k == key:
+                pat_size = len(list(g))
+                pos, max_len = (pos, max_len) if pat_size < max_len else (cum_pos, pat_size)
+                cum_pos += pat_size
+            else:
+                cum_pos += len(list(g))
+        return list(range(pos, pos+max_len))
+    else:
+        return []
