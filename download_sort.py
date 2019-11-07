@@ -229,7 +229,7 @@ def filter_calib(table, date=None, keep=None,
     # now remove the other waves
     remidz = [ri for ri in table[table.Type=='WAVE'].index if ri not in waveidz]
     table.drop(remidz)
-
+    import ipdb; ipdb.set_trace()
     # if still too many entries, try to cut the first or last
     table.reset_index()
     if len(table) > 27:

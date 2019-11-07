@@ -13,8 +13,6 @@ from shutil import copy
 from tqdm import tqdm
 from config import ceres_dir, default_science_dir, default_calib_dir
 
-import ipdb
-
 
 if __name__ == '__main__':
     print('Processing all files in current directory. Assuming they are \
@@ -40,7 +38,8 @@ def show_pdfs(target, prog=None,
 
 def all_targets(science_dir=None, npools=10,
                 do_class=True, extra_calib_dir=False,
-                calib_dir=None, ignore_dirs=[]):
+                calib_dir=None, ignore_dirs=[],
+                only_dirs=[]):
     '''Running CERES-FEROS pipeline on all subfolders. Assuming the folders are sorted
     by Target only, e.g. ./direct/HD10000/sciencefiles.fits - unless extra_calib_dir=True
     Use all_subfolders routine of the same module to reduce files also sorted by
@@ -49,7 +48,8 @@ def all_targets(science_dir=None, npools=10,
     An extra calibdirectory exists, it is assumed the calibdirectory is sorted
     by date only, e.g. ./calibdir/311220000/calibfiles.fits
     The calibfiles are then copied to the sciencefiles, processed and deleted again to
-    save memory'''
+    save memory
+    ignore_dirs=[] and only_dirs=[] can be used to reduce only certain folders'''
     if science_dir is None:
         science_dir = default_science_dir
     if extra_calib_dir and calib_dir is None:
@@ -61,6 +61,9 @@ def all_targets(science_dir=None, npools=10,
     for tardir in tqdm(os.scandir(science_dir)):
         if tardir.is_dir() and not tardir.name.endswith('red') and not \
            tardir.name in ignore_dirs:
+            if only_dirs != [] and tardir not in only_dirs:
+                print('{} is not specified in only_dirs. Ignoring it')
+                continue
             tarname = tardir.name
 
             scfiles = [ffile for ffile in os.scandir(tardir) if (
