@@ -27,7 +27,7 @@ def full_download(target, extract=True, store_pwd=False,
                   eso_user=None,
                   flat_min_exptime=1.,  # in sec
                   sort_calibfiles_by_target=False,
-                  sort_sciencefiles_by_target=True,
+                  sort_sciencefiles_by_target=False,
                   query_radius="08+00",  # in "mm+ss"
                   startdate=None,
                   enddate="", ):
@@ -86,21 +86,24 @@ def full_download(target, extract=True, store_pwd=False,
     # Even if theyre in the confirmation mail. catch them
     # edit: mostly those are files already in the cache.
     missing_downloads = []
-    id2night = {}
+    id2nights = {}
     science_ids = []
     # get the right night for the science file
     for science_id, dtime in zip(t_science['Dataset ID'], 
                                  t_science['MJD-OBS']):
         science_ids.append(science_id)
         night = find_night(dtime)
-        id2night[science_id]=night
+        if science_id in id2nights.keys():
+            id2nights[science_id] = id2nights[science_id] + [night,]
+        else:
+            id2nights[science_id] = [night, ]
         nights.append(night)
     nights = np.unique(nights)
     print('Found %d science obs in %d different nights.' % (len(t_science),
                                                             len(nights)))
 
     for night in nights:
-        ddir = os.path.join(calib_dir, night.replace("-", ""))
+        ddir = os.path.join(calib_dir, night.iso[:10].replace("-", ""))
         if not os.path.exists(ddir):
             os.mkdir(ddir)
 #        os.chdir(ddir)
@@ -110,15 +113,20 @@ def full_download(target, extract=True, store_pwd=False,
         failed_calib_nights += these_failed_calib
 
         for tcalib_id in these_calib_ids:
-            id2night[tcalib_id] = night
+            if tcalib_id in id2nights.keys():
+                id2nights[tcalib_id] = id2nights[tcalib_id] + [night, ]
+            else:
+                id2nights[tcalib_id] = [night, ]
     
 
-    print('Downloading the %d files for target %s' % (len(id2night.keys()),
+    print('Downloading the %d files for target %s' % (len(id2nights.keys()),
                                                       target))
-    astroquery_dir = download_id(id2night.keys(), eso_user, store_pwd=store_pwd,
+    astroquery_dir = download_id(id2nights.keys(), eso_user, store_pwd=store_pwd,
                                  astroquery_dir=astroquery_dir)
-    compress_files(astroquery_dir, fileending='.fits')
+    # compress_files(astroquery_dir, fileending='.fits')
     print('Downloaded')
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
     fn_failed = os.path.join(log_dir, 'failed_calib_searches.csv')
     with open(fn_failed, 'a') as f_failed:
         for failed_night in failed_calib_nights:
@@ -126,37 +134,45 @@ def full_download(target, extract=True, store_pwd=False,
                                                datetime.date.today()))
     print('Moving files to the appropriate directories')
     # for fpath in downloaded:
-    missing_downloads = distribute_files(id2night.keys(),
-                                         id2night, target,
-                                         astroquery_dir,
-                                         calib_dir, science_dir,
-                                         science_ids=science_ids)
-
+    missing_downloads, science_files = distribute_files(
+        id2nights.keys(),
+        id2nights,
+        astroquery_dir,
+        calib_dir, science_dir,
+        science_ids=science_ids)
+    
     while (len(missing_downloads) >= 1):
         old_len_missing = len(missing_downloads)
         print('%d files got lost on the way. Try to redownload them...' %
               (old_len_missing))
-        #astroquery_dir = download_id(missing_downloads, eso_user,
-        #                             astroquery_dir=astroquery_dir,
-        #                             store_pwd=store_pwd)
-        compress_files(astroquery_dir, fileending='.fits')
-        missing_downloads = distribute_files(missing_downloads,
-                                             id2night, target,
-                                             astroquery_dir,
-                                             calib_dir, science_dir,
-                                             science_ids=science_ids)
+        astroquery_dir = download_id(missing_downloads, eso_user,
+                                     astroquery_dir=astroquery_dir,
+                                     store_pwd=store_pwd)
+        # compress_files(astroquery_dir, fileending='.fits')
+        missing_downloads, science_files2 = distribute_files(
+            missing_downloads,
+            id2nights,
+            astroquery_dir,
+            calib_dir, science_dir,
+            science_ids=science_ids)
+        science_files = np.unique(science_files + science_files2)
         if old_len_missing == len(missing_downloads):
             fn_failed_down = os.path.join(log_dir,
                                           'failed_download_files.csv')
+            fn_scfiles = os.path.join(log_dir, 'science_files.csv')
             with open(fn_failed_down, 'a') as f_failed_down:
                 for failed_down in missing_downloads:
                     f_failed_down.write("{}, {}, {}\n".format(target, failed_down,
                                                               datetime.date.today()))
+            with open(fn_scfiles, 'a') as f_scfiles:
+                for scf in science_files:
+                    f_scfiles.write("{}, {}, {}\n".format(target, scf,
+                                                          datetime.date.today()))
             print('Could not download %d files. Please download them manually. \
-You find them in %s' % (old_len_missing, fn_failed_down))
+Probably they are proprietary. You find them in %s' % (old_len_missing, fn_failed_down))
             break
     print('Done downloading %d files. Had problems with %d nights (stored in %s)'
-          % (len(id2night.keys()), len(failed_calib_nights), fn_failed))
+          % (len(id2nights.keys()), len(failed_calib_nights), fn_failed))
 
     if extract:
         overwrite_old = extract_files(direct=os.path.join(calib_dir),
@@ -170,12 +186,12 @@ You find them in %s' % (old_len_missing, fn_failed_down))
     print('Done with with all for target {}  :)'.format(target))
 
 
-
 def query_eso(target, instrument='FEROS', category='SCIENCE',
-              sdate="", edate="", maxrows=999999, query_radius="08+00",
+              sdate="", edate="", starttime="12", endtime="12",
+              maxrows=999999, query_radius="08+00",
               fn_query="last_output_query.csv"):
     call(["wget", "-O", fn_query, "http://archive.eso.org/wdb/wdb/eso/eso_archive_main/query?tab_object=on&target=" + target.replace('+', '%2B') + "&resolver=simbad&tab_target_coord=on&ra=&dec=&box=00+"+query_radius+"&deg_or_hour=hours&format=SexaHours&tab_prog_id=on&prog_id=&tab_instrument=on&instrument=" +
-          instrument + "&stime=" + sdate + "&starttime=12&etime=" + edate + "&endtime=12&tab_dp_cat=true&dp_cat=" + category + "&top=" + str(maxrows) + "&wdbo=csv"])
+          instrument + "&stime=" + sdate + "&starttime=" + starttime + "&etime=" + edate + "&endtime=" + endtime + "&tab_dp_cat=true&dp_cat=" + category + "&top=" + str(maxrows) + "&wdbo=csv"])
     try:
         table = pd.read_csv(fn_query, comment='#', sep=',',
                             skip_blank_lines=True)
@@ -194,56 +210,81 @@ def query_eso(target, instrument='FEROS', category='SCIENCE',
     return table
 
 
-def filter_calib(table, date=None, keep=None, 
+def filter_calib(table, date, keep=None,
                  flat_min_exptime=1):  # in sec
     '''This routine tries to filter the FEROS calibration data.
     You give it the table and it returns only the needed data.
     Use check_calib afterwards to see if it has worked.
     keep: 'first', 'last' ; set this keyword to keep the first
     or last 27 datasets'''
+    if Time(date, format='iso') < Time('2017-12-13T12:00:00.000', format='isot'):
+        new_calib = False
+    else:
+        new_calib = True
+
     table = table.sort_values('MJD-OBS').reset_index()
+
     if date is not None:
-        table = table.iloc[np.where([date in idate for idate in
+        table = table.iloc[np.where([date in idate.iso for idate in
                                      Time(table['MJD-OBS'],
-                                          format='mjd').iso])[0]]
+                                          format='mjd')])[0]]
     table = table[(table.Type == 'BIAS') |
                   (table.Type == 'WAVE') |
                   ((table.Type == 'FLAT') &
                    (table.Exptime >= flat_min_exptime))]
     # if there are 6 BIASES, drop the first one as only 5 are needed and error
     # is known
-    if len(table[table.Type == 'BIAS']) == 6:
+    if np.sum(table.Type == 'BIAS') == 6:
         idx_first_bias = table[(table.Type == 'BIAS')].index[0]
-        table.drop(idx_first_bias)
+        table = table.drop(idx_first_bias)
     table.reset_index()
     table = table.drop(table[(table.Type == 'FLAT') &
                              ~(table.Exptime >= flat_min_exptime)].index)
-    # if all waves are taken in a row, keep the last 12 of them
+    # if all waves are taken in a row, keep the last of them
     # first find the longest consecutive waves
     waveidz = longest_sequence_idz(list(table.Type), key='WAVE')
-    if len(waveidz) >= 12:
+    if new_calib:
+        max_waves = 30
+    else:
+        max_waves = 12
+    if len(waveidz) > max_waves:
         if keep == 'last':
-            waveidz = waveidz[-12:]
+            waveidz = waveidz[-max_waves:]
         elif keep == 'first':
-            waveidz = waveidz[:12]
+            waveidz = waveidz[:max_waves]
     # now remove the other waves
     remidz = [ri for ri in table[table.Type=='WAVE'].index if ri not in waveidz]
-    table.drop(remidz)
-    import ipdb; ipdb.set_trace()
-    # if still too many entries, try to cut the first or last
+    table = table.drop(remidz)
     table.reset_index()
-    if len(table) > 27:
+
+    # if still too many entries, try to cut the first or last if still the
+    # old calibration plan before 2018. Otherwise keep all with 30s integration
+    # as discussed with R. Brahm
+    if not new_calib:
+        if len(table) > 27:
+            if keep == 'last':
+                table = table.iloc[-27:]
+            elif keep == 'first':
+                table = table.iloc[:27]
+    else:
+        wrongwaveidz = table[np.logical_and(table['OBJECT'] == 'WAVE',
+                                            np.abs(table['Exposure']-30) >= 2)].index
+        table = table.drop(wrongwaveidz)
+        table.reset_index()
+        nwave = len(table[table.Type == 'WAVE'])
         if keep == 'last':
-            table = table.iloc[-27:]
+            table = table[-(15+nwave):]
         elif keep == 'first':
-            table = table.iloc[:27]
+            table = table[:15+nwave]
+        table.reset_index()
+
     return table
 
 
 def check_calib(table, flat_min_exptime=1):
     if ((len(table[table.Type == 'BIAS']) == 5) &
         (len(table[(table.Type == 'FLAT') & (table.Exptime >= flat_min_exptime)]) == 10) &
-            ((len(table[table.Type == 'WAVE']) in [6, 12]))):
+            ((len(table[table.Type == 'WAVE']) in np.hstack(((6, 12), np.arange(21, 31)))))):
         return True
     else:
         return False
@@ -266,14 +307,14 @@ def download_id(ids, eso_user, astroquery_dir=None,
     maxlength = 500
     ids = [ii for ii in ids]
     ids = [ids[ii:ii + maxlength] for ii in range(0, len(ids), maxlength)]
-    logged_in = False
+    logged_in = eso.authenticated()
     while not logged_in:
         try:
-            logged_in = eso.login(eso_user, store_password=store_pwd)
+            eso.login(eso_user, store_password=store_pwd)
         except:
-            logged_in = eso.login(eso_user, store_password=store_pwd)
+            pass
+        logged_in = eso.authenticated()
 
-        
     for iid in ids:
         iid = iid
         print('ESO is getting the archive files ({} files) . \
@@ -282,17 +323,14 @@ split up into smaller chunks.'.format(len(iid)))
         eso.retrieve_data(iid)
     return eso.cache_location
 
-def get_calib(date, flat_min_exptime=1):
-    date = date.replace(" ", "-")
-    try:
-        edate = Time(Time(date).jd + 1, format='jd').iso[0:10]
-    except ValueError:
-        date = "-".join([date[0:4], date[4:6], date[6:8]])
-        edate = Time(Time(date).jd + 1, format='jd').iso[0:10]
+def get_calib(night, flat_min_exptime=1):
+    # convert Time to strings for query
+    edate = Time(night.jd + 1, format='jd').iso[:10]
+    date = night.iso[:10]
 
     t_query = query_eso("", category="CALIB",
-                        sdate=date,
-                        edate=edate)
+                        sdate=date, starttime="00",
+                        edate=edate, endtime="24")
     # remove non-technical time
     t_query = t_query[t_query.Program_ID.str.startswith('60.A-')]
     # try the first half of the night
@@ -336,36 +374,44 @@ def get_calib(date, flat_min_exptime=1):
     return down_ids, check_manually
 
 
-def distribute_files(id_list, id2night, target, src_dir,
+def distribute_files(id_list, id2nights,
+                     src_dir,
                      calib_dir, science_dir,
                      science_ids=[], fileending='.fits.Z'):
     '''Distribute the downloaded files to the output folder. If you provide
     the science ids, the science files will be copied in
-    a different folder than the nights.'''
+    a different folder than the calib files.'''
     missing_files = []
+    science_files = []
     outdir = {'calibfile': calib_dir,
               'sciencefile': science_dir}
     for iid in id_list:
+        if 'FEROS.2019-05-15T10:02:43.950' in iid:
+            import ipdb; ipdb.set_trace()
         fpath = os.path.join(src_dir, iid + fileending)
         if iid in science_ids:
             filetype = 'sciencefile'
-            pnout = os.path.join(outdir[filetype], iid+fileending)
+            pnouts = [os.path.join(outdir[filetype], tnight.iso[:10].replace("-", ""),
+                                   iid+fileending) for tnight in id2nights[iid]]
         else:
             filetype = 'calibfile'
-            pnout = os.path.join(outdir[filetype], id2night[iid].replace("-", ""),
-                                 iid+fileending)
-        if not (os.path.isfile(pnout) or os.path.isfile(pnout[:-2])):
-            try:
-                copyfile(fpath, pnout)
-            except IOError:
+            pnouts = [os.path.join(outdir[filetype], tnight.iso[:10].replace("-", ""),
+                                 iid+fileending) for tnight in id2nights[iid]]
+        for pnout in pnouts:
+            if not (os.path.isfile(pnout) or os.path.isfile(pnout[:-2])):
                 if filetype == 'sciencefile':
-                    print('Somehow {} {} is missing (protected file?) - or {} cannot be written. \
-Trying downloading it later again.'.format(filetype, fpath, pnout))
-                    missing_files.append(iid)
-                else:
-                    warn('{} {} could not be downloaded. Even though it is not a \
+                    science_files.append(pnout.replace(".fits.Z", ".fits"))
+                try:
+                    copyfile(fpath, pnout)
+                except IOError:
+                    if filetype == 'sciencefile':
+                        print('Somehow {} {} is missing (protected file?) - or {} cannot be \
+written. Trying downloading it later again.'.format(filetype, fpath, pnout))
+                        missing_files.append(iid)
+                    else:
+                        warn('{} {} could not be downloaded. Even though it is not a \
 potentially protected sciencefile')
-    return missing_files
+    return missing_files, science_files
 
 
 
@@ -391,7 +437,7 @@ def extract_files(direct, overwrite_old="ask"):
             if ff.endswith('.fits.Z'):
                 filelist.append(os.path.join(root, ff))
 
-    print('Uncompressing the %d files' % len(filelist))
+    print('Uncompressing the {} files in {}'.format(len(filelist), direct))
     for ifile in filelist:
         # if the target file does exist, ask
         if os.path.isfile(ifile[:-2]):
