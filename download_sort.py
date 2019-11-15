@@ -308,12 +308,14 @@ def download_id(ids, eso_user, astroquery_dir=None,
     maxlength = 500
     ids = [ii for ii in ids]
     ids = [ids[ii:ii + maxlength] for ii in range(0, len(ids), maxlength)]
+
     logged_in = eso.authenticated()
     while not logged_in:
         try:
             eso.login(eso_user, store_password=store_pwd)
         except:
-            pass
+            print('Login Failed. Wrong username or password?')
+            time.sleep(3)
         logged_in = eso.authenticated()
 
     for iid in ids:

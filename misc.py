@@ -6,5 +6,5 @@ def find_night(dtime):
     if (dtime.mjd % 1) >= 0.5:  # evening
         return Time(dtime.iso[:10], format='iso')
     else:  # morning. previous day
-        return Time((dtime - 1).iso[:10], format='iso')
+        return Time(Time((dtime.jd - 1), format='jd').iso[:10], format='iso')
 

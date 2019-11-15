@@ -1,16 +1,21 @@
-. # DOWNLOADING AND REDUCING FEROS DATA
+# DOWNLOADING AND REDUCING FEROS DATA
 ## Installation
 Note that the script is written in python3, but CERES is based on python2,
 requiring you to have both installed.
 
 ### Non standard anaconda packages needed
-
+To download the data you need
 * astroquery   ( conda install -c astropy astroquery )
 * gi           ( conda install -c conda-forge pygobject )
-* pysynphot    ( conda install pysynphot )
+If you have issues with the keyring, try keyrings.alt
+* keyrings.alt  (  conda install -c conda-forge keyrings.alt )
+
+To also reduce the data, you additionally need
 * tqdm         (  conda install -c conda-forge tqdm )
+* pysynphot    ( conda install pysynphot )
 * my misc routines ( git clone https://github.com/sbrems/misc.git )
 * CERES ( see https://github.com/rabrahm/ceres for installation notes)
+
 
 ## Running the pipeline
 First you need to set up the config.py. Here you need to specify the locations
