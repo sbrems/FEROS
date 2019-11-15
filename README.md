@@ -18,10 +18,10 @@ where to save the data and the log files. Best is to set calib_dir = science_dir
 so that the data can be reduced straight away.
 ### Downloading the files
 To download all files from e.g. tau Cet do. Best is to avoid spaces in the name
-'''python
+```python
 >>> from download_sort import full_download
 >>> full_download("tau_Cet")
-'''
+```
 Please make sure, that the name is recognized by Simbad since parameters such
 as coordinates need to be queried. The selection of the files is purely done
 by coordinates returned from Simbad. A radius of 8 arcmin is used.
@@ -29,15 +29,15 @@ by coordinates returned from Simbad. A radius of 8 arcmin is used.
 ### Reducing the files
 If you did not change the folder structure from the download process and want
 to use 4 CPUs, simply type
-'''python
+```python
 >>> import run_feros_pipeline
 >>> run_feroms_pipeline.all_subfolders(npools=4)
-'''
+```
 ### Collecting the reduced files
 run the following commands:
-'''python
+```python
 >>> import collect_results
 >>> collect_results.all_csvs()
-'''
+```
 You may set activity_indicators=True to return things like the Halpha index.
 This is still experimental and might return wrong results.
