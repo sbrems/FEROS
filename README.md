@@ -1,4 +1,4 @@
-# DOWNLOADING AND REDUCING FEROS DATA
+. # DOWNLOADING AND REDUCING FEROS DATA
 ## Installation
 Note that the script is written in python3, but CERES is based on python2,
 requiring you to have both installed.
@@ -32,3 +32,8 @@ to use 4 CPUs, simply type
 >>> run_feroms_pipeline.all_subfolders(npools=4)
 
 ### Collecting the reduced files
+run the following commands:
+>>> import collect_results
+>>> collect_results.all_csvs()
+You may set activity_indicators=True to return things like the Halpha index.
+This is still experimental and might return wrong results.
