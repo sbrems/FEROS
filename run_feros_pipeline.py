@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import astropy.units as u
-from astropy.table import Table
+from astropy.table import Table, vstack
 import re
 import warnings
 from glob import glob
@@ -11,7 +11,8 @@ from subprocess import Popen, PIPE
 from astropy.io import fits
 from shutil import copy
 from tqdm import tqdm
-from config import ceres_dir, default_science_dir, default_calib_dir
+from config import ceres_dir, default_science_dir, default_calib_dir, \
+    default_log_dir
 
 
 if __name__ == '__main__':
@@ -36,14 +37,17 @@ def show_pdfs(target, prog=None,
     return pdf_files
 
 
-def all_targets(science_dir=None, npools=10,
-                do_class=True, extra_calib_dir=False,
+def _all_targets(science_dir=None, npools=10,
+                do_class=False, extra_calib_dir=False,
                 calib_dir=None, ignore_dirs=[],
                 only_dirs=[]):
     '''Running CERES-FEROS pipeline on all subfolders. Assuming the folders are sorted
     by Target only, e.g. ./direct/HD10000/sciencefiles.fits - unless extra_calib_dir=True
     Use all_subfolders routine of the same module to reduce files also sorted by
     date.
+    do_class=False
+    Set to true to do the classification for Teff and other stellar parameters CERES
+    provides
     extra_calib_dir = True
     An extra calibdirectory exists, it is assumed the calibdirectory is sorted
     by date only, e.g. ./calibdir/311220000/calibfiles.fits
@@ -107,25 +111,42 @@ def all_targets(science_dir=None, npools=10,
 
         
 def all_subfolders(direct=None, npools=4,
-                   do_class=True, show_pdfs=False):
+                   do_class=True, show_pdfs=False,
+                   pnreffile=None,
+                   log_dir=None):
     '''runs the feros ceres pipeline on all subfolders of the directory which have
-    at least 22 .fits files in it and do not end on _red'''
+    at least 16 .fits files in it and do not end on _red. Use this routine if your
+    files are sorted by date only.
+    pnreffile=None
+    provied the path to the reffile for CERES. If not provided, will try to find the
+    logs from the download sequence to identify the targets to decide which mask to 
+    use.'''
     if direct is None:
-            direct = default_science_dir
+        direct = os.path.abspath(default_science_dir)
+    if log_dir is None:
+        log_dir = os.path.abspath(default_log_dir)
+    if pnreffile is None:
+        pnreffle = os.path.abspath(os.path.join(log_dir, 'reffile.txt'))
+    else:
+        pnreffile = os.path.abspath(pnreffile)
     home_dir = os.getcwd()
     os.chdir(ceres_dir)
     for root, subdirs, files in tqdm(os.walk(direct)):
         fits_files = [x for x in files if x.endswith('.fits')]
-        if len(fits_files) >= 16 and not root.endswith('_red'):  # at least 5+10+12(6) calibration files + 1 science
+        # at least 5+10+12(6) calibration files + 1 science
+        if len(fits_files) >= 16 and not root.endswith('_red') and not root.endswith('proc'):
+
             print('\n\
                    #######################################################\n\
                    Processing dir %s containing %d fits-files\n\
                    #######################################################\n'%(root,len(fits_files)))
-            tarname = os.path.split(os.path.dirname(root))[-1]
-            _make_reffile(tarname, root, fits_files)
-            _run_ferospipe(do_class=do_class, root=root)
+                  
+
+            _write_tarnames2header_and_reffile(root, log_dir)
+            _run_ferospipe(do_class=do_class, root=root, npools=npools,
+                           pnreffile=pnreffile)
         else:
-            print('Ignoring folder {} as it has less than 16 files or ends with "_red"'.format(
+            print('\n Ignoring folder {} as it has less than 16 files, is "proc" or ends with "_red"'.format(
                 root))
 
     os.chdir(home_dir)
@@ -176,17 +197,24 @@ def check_fits_files(check_dir=os.getcwd(), recursive=True):
 
 
 def _run_ferospipe(do_class=False, root=os.getcwd(),
-                   npools=4):
+                   npools=4, pnreffile=None):
+    if pnreffile is None:
+        pnreffile=os.path.join(root, 'reffile.txt')
     predir = os.getcwd()
     print('Running pipeline on folder {}'.format(root))
     os.chdir(os.path.join(ceres_dir, 'feros'))
+    if os.path.exists("ferospipe_fp.py"):
+        pipeline = "ferospipe_fp.py"
+    else:
+        pipeline = "ferospipe.py"
     if do_class:
-        p = Popen(["python2", "ferospipe.py", root,
+
+        p = Popen(["python2", pipeline, root,
                    "-npools", str(npools), "-do_class",
-                   "-reffile", os.path.join(root, 'reffile.txt')],
+                   "-reffile", pnreffile],
                   stdin=PIPE, stdout=PIPE, stderr=PIPE)
     else:
-        p = Popen(["python2", "ferospipe.py", root, "-npools",
+        p = Popen(["python2", pipeline, root, "-npools",
                    str(npools), 
                    "-reffile", os.path.join(root, 'reffile.txt')],
                   stdin=PIPE, stdout=PIPE, stderr=PIPE)
@@ -214,7 +242,7 @@ def _run_ferospipe(do_class=False, root=os.getcwd(),
     print('achieveable rvs: %s(saved in %s):'%(rvs, fnrv))
 
     
-def _make_reffile(tarname, root, fits_files, science_dir=None):
+def _make_reffile(root, fits_files, science_dir=None, tarname=None):
     '''A routine to make the reffile for the CERES pipeline. The coordinates are
     used from the header, the mask is determined via SIMBAD. If not found,
     G2 is used.'''
@@ -267,13 +295,7 @@ files.'.format(root))
             print('Couldnt find SpT on Simbad for {}. \
     Setting it to G2III'.format(starget.sname))
             starget.SpT = ('G2V')
-        # determine which of the three masks to use. 05III has numerical val 15.
-        if starget.SpT_num() >= 70:  # Mstar
-            mask = 'M2'
-        elif starget.SpT_num() >= 60:  # Kstar
-            mask = 'K5'
-        else:  # the default mask
-            mask = 'G2'
+        # determine which of the three masks to use. 05III has numerical val 15
         print('Using mask {}'.format(mask))
         with open(os.path.join(root, 'reffile.txt'), 'a') as reff:
             reff.write('{},{},{},{},{},{},{},{}\n'.format(
@@ -285,4 +307,78 @@ files.'.format(root))
                 0,
                 mask,
                 10.0))
+
+
+def _write_tarnames2header_and_reffile(direct, log_dir):
+    '''Find the tarnames of the files. They should be stored in a file created by the
+    download routine.'''
+    sciencefiles = [os.path.abspath(os.path.join(direct, f)) for f in os.listdir(direct) \
+                    if f.endswith('.fits') and \
+                     fits.getheader(os.path.join(direct, f))['ESO DPR CATG'].strip().upper() \
+                    == 'SCIENCE']
+
+    pndownloadlog = os.path.join(log_dir, 'science_files.csv')
+    if not os.path.exists:
+        raise FileNotFoundError('File {} not found with the queried targetnames. But it is \
+needed to identify the different sciencefiles.'.format(pndownloadlog))
+    tdownloadlog = Table.read(os.path.join(log_dir, 'science_files.csv'), delimiter=',',
+                                          names=['tarnamequery', 'abspath', 'querydate'])
+    for sf in sciencefiles:
+        if sf in tdownloadlog['abspath']:
+            # update headername
+            tarnamefits = fits.getheader(sf)['OBJECT']
+            tarnamequery = tdownloadlog['tarnamequery'][tdownloadlog['abspath']==sf][0]
+            if tarnamefits != tarnamequery:
+                print('Replacing header name {} by queryname {}'.format(
+                    tarnamefits, tarnamequery))
+                with fits.open(sf, mode='update') as hdul:
+                     hdul[0].header['OBJECT'] = tarnamequery
+                     hdul.flush()
+            # write reffile
+            _update_reffile(os.path.join(log_dir, 'reffile.txt'), tarnamequery)
+            print('Found sciencefile for target {}'.format(tarnamequery))
+            
+        else:
+            warnings.warn('Unknown sciencefile {}. Letting CERES find parameters'.format(sf))
+
+
+def _update_reffile(pnreffile, tarname):
+    reffilecolnames = ['tarname', 'RA', 'DEC', 'pmRA', 'pmDEC', 'userefcoords',
+                                     'mask', 'vsini']
+
+    if os.path.exists(pnreffile):
+        treffile = Table.read(pnreffile, delimiter=',', format='ascii.no_header',
+                              names=reffilecolnames,
+                              )
+    else:
+        treffile = Table([[]]*8, names=reffilecolnames,)
+    if tarname in treffile['tarname']:
+        pass
+    else:
+        try:
+            star = Star(tarname)
+            star.pm = 'auto'
+            star.coordinates = 'auto'
+            star.get_SpT()
+            if star.SpT_num() >= 70:  # Mstar
+                mask = 'M2'
+            elif star.SpT_num() >= 60:  # Kstar
+                mask = 'K5'
+            else:  # the default mask
+                mask = 'G2'
+            print('Using mask {} for {}'.format(mask, star.sname))
+            with open(pnreffile, 'a') as reff:
+                reff.write('{},{},{},{},{},{},{},{}\n'.format(
+                    star.sname,
+                    star.coordinates.ra.to_string(u.hourangle, sep=':')[0],
+                    star.coordinates.dec.to_string(u.degree, sep=':')[0],
+                    star.pm[0].to('mas / yr').value,
+                    star.pm[1].to('mas / yr').value,
+                    1,
+                    mask,
+                    10.0 ,))
+                
+        except:
+            import ipdb; ipdb.set_trace()
+            warning.warn('Couldnt automatically find parameters for {}'.format(tarname))
 

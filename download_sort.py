@@ -1,6 +1,7 @@
 import os
 import sys
 import datetime
+import time
 import numpy as np
 import pandas as pd
 from itertools import groupby
@@ -320,7 +321,12 @@ def download_id(ids, eso_user, astroquery_dir=None,
         print('ESO is getting the archive files ({} files) . \
 This may take some time! Be patient ;) It might have been \
 split up into smaller chunks.'.format(len(iid)))
-        eso.retrieve_data(iid)
+        try:
+            eso.retrieve_data(iid)
+        except:
+            print('An error during downloading occured. Waiting 30s and trying again')
+            time.sleep(30)
+            eso.retrieve_data(iid)
     return eso.cache_location
 
 def get_calib(night, flat_min_exptime=1):
