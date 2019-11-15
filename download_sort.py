@@ -149,7 +149,7 @@ def full_download(target, extract=True, store_pwd=False,
         astroquery_dir = download_id(missing_downloads, eso_user,
                                      astroquery_dir=astroquery_dir,
                                      store_pwd=store_pwd)
-        # compress_files(astroquery_dir, fileending='.fits')
+        compress_files(astroquery_dir, fileending='.fits')
         missing_downloads, science_files2 = distribute_files(
             missing_downloads,
             id2nights,
