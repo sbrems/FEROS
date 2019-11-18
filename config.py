@@ -2,7 +2,7 @@
 
 
 # SET THE FOLDER PATHS
-ceres_dir = "/data/beegfs/astro-storage/groups/launhardt/RVSPY/ceres"  # where to run ceres from. Need it as its Py2
+ceres_dir = "/data/beegfs/astro-storage/groups/launhardt/RVSPY/ceres/ceres-master/"  # where to run ceres from. Need it as its Py2
 # the files below need to be sorted by target and date
 default_science_dir = "/data/beegfs/astro-storage/groups/launhardt/RVSPY/archival_datasearch_nov19/"
 # directrories for the calib and science files. Eventually you want 

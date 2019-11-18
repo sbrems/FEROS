@@ -124,7 +124,7 @@ def full_download(target, extract=True, store_pwd=False,
                                                       target))
     astroquery_dir = download_id(id2nights.keys(), eso_user, store_pwd=store_pwd,
                                  astroquery_dir=astroquery_dir)
-    # compress_files(astroquery_dir, fileending='.fits')
+
     print('Downloaded')
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
@@ -135,6 +135,7 @@ def full_download(target, extract=True, store_pwd=False,
                                                datetime.date.today()))
     print('Moving files to the appropriate directories')
     # for fpath in downloaded:
+    compress_files(astroquery_dir, fileending='.fits')
     missing_downloads, science_files = distribute_files(
         id2nights.keys(),
         id2nights,
@@ -394,8 +395,6 @@ def distribute_files(id_list, id2nights,
     outdir = {'calibfile': calib_dir,
               'sciencefile': science_dir}
     for iid in id_list:
-        if 'FEROS.2019-05-15T10:02:43.950' in iid:
-            import ipdb; ipdb.set_trace()
         fpath = os.path.join(src_dir, iid + fileending)
         if iid in science_ids:
             filetype = 'sciencefile'
