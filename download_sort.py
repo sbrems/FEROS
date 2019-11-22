@@ -27,7 +27,7 @@ def full_download(target, extract=True, store_pwd=False,
                   log_dir=None,
                   eso_user=None,
                   unrobust_calibfile=True,
-                  flat_min_exptime=1.,  # in sec
+                  flat_min_exptime=.8,  # in sec
                   sort_calibfiles_by_target=False,
                   sort_sciencefiles_by_target=False,
                   query_radius="08+00",  # in "mm+ss"
@@ -229,7 +229,7 @@ def query_eso(target, instrument='FEROS', category='SCIENCE',
 
 
 def filter_calib(table, date, keep=None,
-                 flat_min_exptime=1):  # in sec
+                 flat_min_exptime=.8):  # in sec
     '''This routine tries to filter the FEROS calibration data.
     You give it the table and it returns only the needed data.
     Use check_calib afterwards to see if it has worked.
@@ -304,7 +304,7 @@ def filter_calib(table, date, keep=None,
     return table
 
 
-def check_calib(table, flat_min_exptime=1):
+def check_calib(table, flat_min_exptime=.8):
     if ((len(table[table.Type == 'BIAS']) == 5) &
         (len(table[(table.Type == 'FLAT') & (table.Exptime >= flat_min_exptime)]) == 10) &
             ((len(table[table.Type == 'WAVE']) in np.hstack(((6, 12), np.arange(21, 45)))))):
@@ -353,7 +353,7 @@ split up into smaller chunks.'.format(len(iid)))
             eso.retrieve_data(iid)
     return eso.cache_location
 
-def get_calib(night, flat_min_exptime=1, unrobust_calibfiles=True):
+def get_calib(night, flat_min_exptime=.8, unrobust_calibfiles=True):
     # convert Time to strings for query
     edate = Time(night.jd + 1, format='jd').iso[:10]
     date = night.iso[:10]
