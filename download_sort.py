@@ -133,16 +133,24 @@ def full_download(target, extract=True, store_pwd=False,
         for failed_night in failed_calib_nights:
             f_failed.write("{}, {}, {}\n".format(target, failed_night,
                                                datetime.date.today()))
+
+    compress_files(astroquery_dir, fileending='.fits')
+
     print('Moving files to the appropriate directories')
     # for fpath in downloaded:
-    compress_files(astroquery_dir, fileending='.fits')
     missing_downloads, science_files = distribute_files(
         id2nights.keys(),
         id2nights,
         astroquery_dir,
         calib_dir, science_dir,
         science_ids=science_ids)
-    
+
+    # save the science file logs for later identification
+    fn_scfiles = os.path.join(log_dir, 'science_files.csv')
+    with open(fn_scfiles, 'a') as f_scfiles:
+        for scf in science_files:
+            f_scfiles.write("{}, {}, {}\n".format(target, scf,                                                          datetime.date.today()))
+
     while (len(missing_downloads) >= 1):
         old_len_missing = len(missing_downloads)
         print('%d files got lost on the way. Try to redownload them...' %
@@ -157,17 +165,17 @@ def full_download(target, extract=True, store_pwd=False,
             astroquery_dir,
             calib_dir, science_dir,
             science_ids=science_ids)
-        science_files = np.unique(science_files + science_files2)
+        # science_files = np.unique(science_files + science_files2)
         if old_len_missing == len(missing_downloads):
             fn_failed_down = os.path.join(log_dir,
                                           'failed_download_files.csv')
-            fn_scfiles = os.path.join(log_dir, 'science_files.csv')
+
             with open(fn_failed_down, 'a') as f_failed_down:
                 for failed_down in missing_downloads:
                     f_failed_down.write("{}, {}, {}\n".format(target, failed_down,
                                                               datetime.date.today()))
             with open(fn_scfiles, 'a') as f_scfiles:
-                for scf in science_files:
+                for scf in science_files2:
                     f_scfiles.write("{}, {}, {}\n".format(target, scf,
                                                           datetime.date.today()))
             print('Could not download %d files. Please download them manually. \

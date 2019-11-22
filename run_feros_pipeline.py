@@ -318,7 +318,7 @@ def _write_tarnames2header_and_reffile(direct, log_dir):
                     == 'SCIENCE']
 
     pndownloadlog = os.path.join(log_dir, 'science_files.csv')
-    if not os.path.exists:
+    if not os.path.exists(pndownloadlog):
         raise FileNotFoundError('File {} not found with the queried targetnames. But it is \
 needed to identify the different sciencefiles.'.format(pndownloadlog))
     tdownloadlog = Table.read(os.path.join(log_dir, 'science_files.csv'), delimiter=',',

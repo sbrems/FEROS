@@ -7,12 +7,14 @@ requiring you to have both installed.
 To download the data you need
 * astroquery   ( conda install -c astropy astroquery )
 * gi           ( conda install -c conda-forge pygobject )
+
+
 If you have issues with the keyring, try keyrings.alt
 * keyrings.alt  (  conda install -c conda-forge keyrings.alt )
 
 To also reduce the data, you additionally need
 * tqdm         (  conda install -c conda-forge tqdm )
-* pysynphot    ( conda install pysynphot )
+* pysynphot    ( conda config --add channels http://ssb.stsci.edu/astroconda && conda install pysynphot )
 * my misc routines ( git clone https://github.com/sbrems/misc.git )
 * CERES ( see https://github.com/rabrahm/ceres for installation notes)
 
@@ -36,7 +38,7 @@ If you did not change the folder structure from the download process and want
 to use 4 CPUs, simply type
 ```python
 >>> import run_feros_pipeline
->>> run_feroms_pipeline.all_subfolders(npools=4)
+>>> run_feros_pipeline.all_subfolders(npools=4)
 ```
 ### Collecting the reduced files
 run the following commands:
