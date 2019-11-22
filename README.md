@@ -18,6 +18,10 @@ To also reduce the data, you additionally need
 * my misc routines ( git clone https://github.com/sbrems/misc.git )
 * CERES ( see https://github.com/rabrahm/ceres for installation notes)
 
+If you want to collect the PDFs and CCFs, you also need:
+* pypdf2 (  conda install -c conda-forge pypdf2 )
+* reportlab ( conda install -c anaconda reportlab )
+
 
 ## Running the pipeline
 First you need to set up the config.py. Here you need to specify the locations
@@ -28,6 +32,7 @@ To download all files from e.g. tau Cet do. Best is to avoid spaces in the name
 ```python
 >>> from download_sort import full_download
 >>> full_download("tau_Cet",
+                  store_pwd=False,
                   unrobust_calibfiles=True,
                   sort_calibfiles_by_target=False, 
                   sort_sciencefiles_by_target=False)
@@ -45,8 +50,11 @@ If you did not change the folder structure from the download process and want
 to use 4 CPUs, simply type
 ```python
 >>> import run_feros_pipeline
->>> run_feros_pipeline.all_subfolders(npools=4, )
+>>> run_feros_pipeline.all_subfolders(npools=4, 
+                                      do_class=False)
 ```
+The do_class is the passed to CERES, which can analyse some target properties like Teff.
+False doesnt analyse those.
 
 ### Collecting the reduced files
 run the following commands:
@@ -56,3 +64,4 @@ run the following commands:
 ```
 You may set activity_indicators=True to return things like the Halpha index.
 This is still experimental and might return wrong results.
+The results will be stored in observation_summary.csv in your log_dir

@@ -111,7 +111,7 @@ def _all_targets(science_dir=None, npools=10,
 
         
 def all_subfolders(direct=None, npools=4,
-                   do_class=True, show_pdfs=False,
+                   do_class=False, show_pdfs=False,
                    pnreffile=None,
                    log_dir=None):
     '''runs the feros ceres pipeline on all subfolders of the directory which have

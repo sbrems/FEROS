@@ -7,10 +7,7 @@ import seaborn as sns
 from astropy.table import Table, vstack
 from astropy.time import Time
 from glob import glob
-from PyPDF2 import PdfFileReader, PdfFileWriter
 import io
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
 from config import default_science_dir, default_log_dir
 
 nceres = 18  # number of ceres outputs
@@ -178,6 +175,10 @@ def merge_final_CCF(parent_directory, plot_dir=None):
     and extract the
     CCF functions CERES returns. Sort those by target and collect them in
     a big pdf.'''
+    from PyPDF2 import PdfFileReader, PdfFileWriter
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import letter
+
     if plot_dir is None:
         plot_dir=parent_directory
     pnpdfs = glob(os.path.join(parent_directory, '**/proc/*.pdf'), recursive=True)

@@ -26,7 +26,7 @@ def full_download(target, extract=True, store_pwd=False,
                   science_dir=None,
                   log_dir=None,
                   eso_user=None,
-                  unrobust_calibfile=True,
+                  unrobust_calibfiles=True,
                   flat_min_exptime=.8,  # in sec
                   sort_calibfiles_by_target=False,
                   sort_sciencefiles_by_target=False,
@@ -48,7 +48,7 @@ def full_download(target, extract=True, store_pwd=False,
     startdate/enddate= ""
     give the first and last date of the data to search. "" searches for all data.
     format is yyyy-mm-dd (exclusive for beginning)
-    unrobust_calibfile=True
+    unrobust_calibfiles=True
     set to True, to download all the calibfiles of the day, if the important ones
     couldnt be determined automatically. An output of which folders had trouble is
     written out.'''
