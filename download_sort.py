@@ -37,10 +37,10 @@ def full_download(target, extract=True, store_pwd=False,
     files for each night (5 BIAS, 10 flats, 6 or 12 wave calib). If there is anything off this standard
     calibration, no calib files are downloaded and the corresponding nights are stored in a file
     called failed_calib_<target>.txt. So check this out manually then.
-    sort_calibfiles_by_target=True
+    sort_calibfiles_by_target=False
     if true, make a subfolder with the targetname. Setting to false savese a lot of space
     and computing power if there are different targets in the same night
-    sort_calibfiles_by_target=True
+    sort_sciencefiles_by_target=False
     if true, make a subfolder with the targetname. This is recommended
     overwrite_old="ask" [True, False]
     if True overwrites the old .fits files with the new ones during extraction.

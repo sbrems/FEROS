@@ -27,8 +27,15 @@ so that the data can be reduced straight away.
 To download all files from e.g. tau Cet do. Best is to avoid spaces in the name
 ```python
 >>> from download_sort import full_download
->>> full_download("tau_Cet")
+>>> full_download("tau_Cet",
+                  unrobust_calibfiles=True,
+                  sort_calibfiles_by_target=False, 
+                  sort_sciencefiles_by_target=False)
 ```
+The keywords are optional and the default setting. Note that the unrobust_calibfiles=True
+setting will download all dark, flat and wave files of the daycalibration if the automatic
+determination of the correct ones has failed. Check failed_calib.csv in the log_dir to see
+which nights those were.
 Please make sure, that the name is recognized by Simbad since parameters such
 as coordinates need to be queried. The selection of the files is purely done
 by coordinates returned from Simbad. A radius of 8 arcmin is used.
@@ -38,8 +45,9 @@ If you did not change the folder structure from the download process and want
 to use 4 CPUs, simply type
 ```python
 >>> import run_feros_pipeline
->>> run_feros_pipeline.all_subfolders(npools=4)
+>>> run_feros_pipeline.all_subfolders(npools=4, )
 ```
+
 ### Collecting the reduced files
 run the following commands:
 ```python
