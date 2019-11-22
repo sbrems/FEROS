@@ -26,6 +26,7 @@ def full_download(target, extract=True, store_pwd=False,
                   science_dir=None,
                   log_dir=None,
                   eso_user=None,
+                  unrobust_calibfile=True,
                   flat_min_exptime=1.,  # in sec
                   sort_calibfiles_by_target=False,
                   sort_sciencefiles_by_target=False,
@@ -46,7 +47,11 @@ def full_download(target, extract=True, store_pwd=False,
     False does skip the extraction, ask will ask
     startdate/enddate= ""
     give the first and last date of the data to search. "" searches for all data.
-    format is yyyy-mm-dd (exclusive for beginning)'''
+    format is yyyy-mm-dd (exclusive for beginning)
+    unrobust_calibfile=True
+    set to True, to download all the calibfiles of the day, if the important ones
+    couldnt be determined automatically. An output of which folders had trouble is
+    written out.'''
     # load the default values if noothers were given
     if startdate is None:
         startdate=default_startdate
@@ -108,8 +113,11 @@ def full_download(target, extract=True, store_pwd=False,
         if not os.path.exists(ddir):
             os.mkdir(ddir)
 #        os.chdir(ddir)
-        these_calib_ids, these_failed_calib = get_calib(night,
-                                      flat_min_exptime=flat_min_exptime)
+        these_calib_ids, these_failed_calib = get_calib(
+            night,
+            flat_min_exptime=flat_min_exptime,
+            unrobust_calibfiles=unrobust_calibfiles)
+
         calib_ids.append(these_calib_ids)
         failed_calib_nights += these_failed_calib
 
@@ -225,8 +233,8 @@ def filter_calib(table, date, keep=None,
     '''This routine tries to filter the FEROS calibration data.
     You give it the table and it returns only the needed data.
     Use check_calib afterwards to see if it has worked.
-    keep: 'first', 'last' ; set this keyword to keep the first
-    or last 27 datasets'''
+    keep: 'first', 'last', 'all' ; set this keyword to keep the first
+    or last 27 datasets or all'''
     if Time(date, format='iso') < Time('2017-12-13T12:00:00.000', format='isot'):
         new_calib = False
     else:
@@ -250,6 +258,7 @@ def filter_calib(table, date, keep=None,
     table.reset_index()
     table = table.drop(table[(table.Type == 'FLAT') &
                              ~(table.Exptime >= flat_min_exptime)].index)
+
     # if all waves are taken in a row, keep the last of them
     # first find the longest consecutive waves
     waveidz = longest_sequence_idz(list(table.Type), key='WAVE')
@@ -262,6 +271,8 @@ def filter_calib(table, date, keep=None,
             waveidz = waveidz[-max_waves:]
         elif keep == 'first':
             waveidz = waveidz[:max_waves]
+        elif keep == 'all':
+            pass
     # now remove the other waves
     remidz = [ri for ri in table[table.Type=='WAVE'].index if ri not in waveidz]
     table = table.drop(remidz)
@@ -276,7 +287,9 @@ def filter_calib(table, date, keep=None,
                 table = table.iloc[-27:]
             elif keep == 'first':
                 table = table.iloc[:27]
-    else:
+            elif keep == 'all':
+                pass
+    elif not keep=='all':
         wrongwaveidz = table[np.logical_and(table['OBJECT'] == 'WAVE',
                                             np.abs(table['Exposure']-30) >= 2)].index
         table = table.drop(wrongwaveidz)
@@ -294,7 +307,7 @@ def filter_calib(table, date, keep=None,
 def check_calib(table, flat_min_exptime=1):
     if ((len(table[table.Type == 'BIAS']) == 5) &
         (len(table[(table.Type == 'FLAT') & (table.Exptime >= flat_min_exptime)]) == 10) &
-            ((len(table[table.Type == 'WAVE']) in np.hstack(((6, 12), np.arange(21, 31)))))):
+            ((len(table[table.Type == 'WAVE']) in np.hstack(((6, 12), np.arange(21, 45)))))):
         return True
     else:
         return False
@@ -340,7 +353,7 @@ split up into smaller chunks.'.format(len(iid)))
             eso.retrieve_data(iid)
     return eso.cache_location
 
-def get_calib(night, flat_min_exptime=1):
+def get_calib(night, flat_min_exptime=1, unrobust_calibfiles=True):
     # convert Time to strings for query
     edate = Time(night.jd + 1, format='jd').iso[:10]
     date = night.iso[:10]
@@ -385,6 +398,11 @@ def get_calib(night, flat_min_exptime=1):
         down_ids = []
         print('Cant find calib files automatically for date ', date)
         check_manually = [date, ]
+        if unrobust_calibfiles:
+            print('Downloading all calibfiles as requested')
+            down_ids=filter_calib(t_query, date=date, keep='all',
+                                  flat_min_exptime=0.)
+
     else:
         check_manually = []
 
