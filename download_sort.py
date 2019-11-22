@@ -240,7 +240,7 @@ def filter_calib(table, date, keep=None,
     else:
         new_calib = True
 
-    table = table.sort_values('MJD-OBS').reset_index()
+    table = table.sort_values('MJD-OBS').reset_index(drop=True)
 
     if date is not None:
         table = table.iloc[np.where([date in idate.iso for idate in
@@ -255,7 +255,7 @@ def filter_calib(table, date, keep=None,
     if np.sum(table.Type == 'BIAS') == 6:
         idx_first_bias = table[(table.Type == 'BIAS')].index[0]
         table = table.drop(idx_first_bias)
-    table.reset_index()
+    table = table.reset_index(drop=True)
     table = table.drop(table[(table.Type == 'FLAT') &
                              ~(table.Exptime >= flat_min_exptime)].index)
 
@@ -276,7 +276,7 @@ def filter_calib(table, date, keep=None,
     # now remove the other waves
     remidz = [ri for ri in table[table.Type=='WAVE'].index if ri not in waveidz]
     table = table.drop(remidz)
-    table.reset_index()
+    table = table.reset_index(drop=True)
 
     # if still too many entries, try to cut the first or last if still the
     # old calibration plan before 2018. Otherwise keep all with 30s integration
@@ -293,13 +293,13 @@ def filter_calib(table, date, keep=None,
         wrongwaveidz = table[np.logical_and(table['OBJECT'] == 'WAVE',
                                             np.abs(table['Exposure']-30) >= 2)].index
         table = table.drop(wrongwaveidz)
-        table.reset_index()
+        table = table.reset_index(drop=True)
         nwave = len(table[table.Type == 'WAVE'])
         if keep == 'last':
             table = table[-(15+nwave):]
         elif keep == 'first':
             table = table[:15+nwave]
-        table.reset_index()
+        table = table.reset_index(drop=True)
 
     return table
 
@@ -363,6 +363,7 @@ def get_calib(night, flat_min_exptime=.8, unrobust_calibfiles=True):
                         edate=edate, endtime="24")
     # remove non-technical time
     t_query = t_query[t_query.Program_ID.str.startswith('60.A-')]
+
     # try the first half of the night
     calib_failed = True
     if len(t_query) > 0:
