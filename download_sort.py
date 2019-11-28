@@ -144,6 +144,13 @@ def full_download(target, extract=True, store_pwd=False,
 
     compress_files(astroquery_dir, fileending='.fits')
 
+    if True:
+        min_filesize = 100*1000  # in bit
+        print('Deleting fits files smaller than {} kb. Assuming errors during \
+the download. They will be downloaded again'.format(min_filesize//1000))
+        delete_small_files(astroquery_dir, min_filesize,
+                           fileendings=['.fits', '.fits.Z'])
+
     print('Moving files to the appropriate directories')
     # for fpath in downloaded:
     missing_downloads, science_files = distribute_files(
@@ -167,6 +174,12 @@ def full_download(target, extract=True, store_pwd=False,
                                      astroquery_dir=astroquery_dir,
                                      store_pwd=store_pwd)
         compress_files(astroquery_dir, fileending='.fits')
+        if True:
+            print('Deleting fits files smaller than {} kb. Assuming errors during \
+the download. They will be downloaded again'.format(min_filesize//1000))
+            delete_small_files(astroquery_dir, min_filesize,
+                               fileendings=['.fits', '.fits.Z'])
+
         missing_downloads, science_files2 = distribute_files(
             missing_downloads,
             id2nights,
@@ -332,13 +345,15 @@ def download_id(ids, eso_user, astroquery_dir=None,
     ids = [ids[ii:ii + maxlength] for ii in range(0, len(ids), maxlength)]
 
     logged_in = eso.authenticated()
-    while not logged_in:
+    login_attempt = 0
+    while not logged_in and login_attempt <= 5:
         try:
             eso.login(eso_user, store_password=store_pwd)
         except:
             print('Login Failed. Wrong username or password?')
             time.sleep(3)
         logged_in = eso.authenticated()
+        login_attempt += 1
 
     for iid in ids:
         iid = iid
@@ -507,3 +522,14 @@ def longest_sequence_idz(array, key):
         return list(range(pos, pos+max_len))
     else:
         return []
+
+
+def delete_small_files(path, minsize, fileendings):
+    for fileending in fileendings:
+        remfiles = [ff for ff in glob(path+'**'+fileending, recursive=True)
+                    if (os.path.getsize(ff) < minsize)]
+
+        print('Found and deleting {} files smaller than {} kb ending on {}'.format(
+            len(remfiles), minsize//1000, fileending))
+        for rm in remfiles:
+            os.remove(rm)
